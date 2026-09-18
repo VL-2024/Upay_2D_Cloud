@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>UPAY 2D v0.1.38-alpha</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <div id="appShell" class="shell">
+    <div class="bg-layer scene-background" id="backgroundLayer"></div>
+    <div class="carpet-layer scene-carpet" id="carpetLayer"></div>
+    <div id="pixiHost" class="pixi-host"></div>
+
+    <header class="topbar">
+      <div class="brand">X2<br><span>ЛОТЕРЕЯ</span></div>
+      <div class="title-block">
+        <div class="title">УПАЙ</div>
+        <div class="subtitle">Выбивай чуко. Собирай тройки. Лови Хана!</div>
+      </div>
+
+      <div class="status-panel">
+        <div class="pill balance-pill">
+          <span>Баланс</span>
+          <strong id="balanceValue">12 450 сом</strong>
+        </div>
+
+        <button class="pill stake-pill" id="stakeSelect" type="button" aria-expanded="false">
+          <span>Ставка</span>
+          <strong><span id="stakeValue">50</span> <span id="currencyValue">сом</span></strong>
+          <span class="stake-arrow">▾</span>
+        </button>
+        <div class="stake-menu" id="stakeMenu" hidden></div>
+
+        <div class="minor-status-row">
+          <div class="minor-pill">№ <strong id="ticketValue">784321</strong></div>
+          <label class="minor-pill toggle-pill">Демо
+            <input id="demoToggle" type="checkbox" checked />
+            <span class="toggle"></span>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <section class="pose-help-panel" id="poseHelpPanel">
+      <button class="pose-help-toggle" id="poseHelpToggle" type="button" aria-label="Свернуть панель">×</button>
+      <div class="pose-help-title">Положения чуко</div>
+      <div class="pose-help-sub">Нажми название — подсветим на поле</div>
+      <div class="pose-help-buttons" id="poseHelpButtons"></div>
+    </section>
+
+    <aside class="side-tools">
+      <button class="tool" type="button" aria-label="Звук">◖</button>
+      <button class="tool" type="button" aria-label="Музыка">♪</button>
+      <button class="tool" type="button" aria-label="Информация">i</button>
+      <button class="tool" id="sceneSettingsToggle" type="button" aria-label="Настройка сцены">⚙</button>
+    </aside>
+
+    <section class="objective" id="objective">Собери 3 чуко</section>
+
+    <section class="scene-settings-panel hidden" id="sceneSettingsPanel">
+      <div class="scene-settings-head">
+        <div>НАСТРОЙКА СЦЕНЫ</div>
+        <button type="button" class="scene-settings-close" id="sceneSettingsClose" aria-label="Закрыть">×</button>
+      </div>
+
+      <label class="scene-row">
+        <span>Размер чуко</span><b id="valChukoSize">100%</b>
+        <input type="range" id="sceneChukoSize" min="0.7" max="1.65" step="0.01" value="1.16">
+      </label>
+
+      <label class="scene-row">
+        <span>Размер Хана</span><b id="valKhanSize">100%</b>
+        <input type="range" id="sceneKhanSize" min="0.75" max="1.45" step="0.01" value="1">
+      </label>
+
+      <label class="scene-row">
+        <span>Размер ковра</span><b id="valCarpetSize">100%</b>
+        <input type="range" id="sceneCarpetSize" min="0.65" max="1.15" step="0.01" value="1">
+      </label>
+
+      <label class="scene-row">
+        <span>Ковер выше / ниже</span><b id="valCarpetY">0.0%</b>
+        <input type="range" id="sceneCarpetY" min="-0.12" max="0.12" step="0.002" value="0">
+      </label>
+
+      <label class="scene-row">
+        <span>Куча выше / ниже</span><b id="valPileY">0.0%</b>
+        <input type="range" id="scenePileY" min="-0.12" max="0.12" step="0.002" value="0">
+      </label>
+
+      <label class="scene-row">
+        <span>Высота кучки</span><b id="valPileHeight">1.00×</b>
+        <input type="range" id="scenePileHeight" min="0.55" max="1.75" step="0.01" value="1.67">
+      </label>
+
+      <label class="scene-row">
+        <span>Разброс чуко</span><b id="valSpread">1.00×</b>
+        <input type="range" id="sceneSpread" min="0.4" max="1.9" step="0.01" value="0.71">
+      </label>
+
+      <div class="scene-actions">
+        <button type="button" id="sceneRelayoutBtn">Новая раскладка</button>
+        <button type="button" id="sceneCopyBtn">Копировать</button>
+        <button type="button" id="sceneResetBtn" class="secondary">Сброс</button>
+      </div>
+    </section>
+
+    <section class="upay-zones" aria-label="Поля УПАЙ">
+      <div class="zone" id="upayZone1">
+        <div class="zone-title">УПАЙ 1 <span class="zone-progress" id="zone1Progress">0/3</span></div>
+        <div class="zone-slots" id="zone1"></div>
+      </div>
+      <div class="center-ornament">✦</div>
+      <div class="zone" id="upayZone2">
+        <div class="zone-title">УПАЙ 2 <span class="zone-progress" id="zone2Progress">0/3</span></div>
+        <div class="zone-slots" id="zone2"></div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <div class="action-row">
+        <button class="icon-btn" id="autoBtn" type="button"><b>⟳</b><span>Автоигра</span></button>
+        <button class="main-btn" id="newGameBtn" type="button">НОВАЯ ИГРА <small id="betLabel">50 сом</small></button>
+        <button class="icon-btn" id="prizesBtn" type="button"><b>▣</b><span>Мои призы</span></button>
+      </div>
+    </section>
+
+    <footer class="footer">БОЛЬШЕ, ЧЕМ ЛОТЕРЕЯ <b>X2</b> НАШИ ИГРЫ. НАША КУЛЬТУРА.</footer>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
