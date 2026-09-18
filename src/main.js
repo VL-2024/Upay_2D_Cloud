@@ -241,6 +241,16 @@ function setupSceneSettingsUI() {
   openBtn?.addEventListener('click', () => panel.classList.toggle('hidden'));
   closeBtn?.addEventListener('click', () => panel.classList.add('hidden'));
 
+  // Sync the sliders FROM config.js before the first apply(), so the panel's
+  // hardcoded HTML defaults never silently override CONFIG.scene on load.
+  document.getElementById('sceneChukoSize').value = DEFAULT_SCENE.chukoScaleMultiplier;
+  document.getElementById('sceneKhanSize').value = DEFAULT_SCENE.khanScaleMultiplier;
+  document.getElementById('sceneCarpetSize').value = 1;
+  document.getElementById('sceneCarpetY').value = 0;
+  document.getElementById('scenePileY').value = 0;
+  document.getElementById('scenePileHeight').value = DEFAULT_SCENE.pileSpreadHeightScale;
+  document.getElementById('sceneSpread').value = DEFAULT_SCENE.pileSpreadScale;
+
   apply(false);
 }
 
@@ -448,7 +458,7 @@ function randomizeLayout() {
 
 function resolveAllPieceOverlaps() {
   const active = state.pieces.filter(p => p?.sprite && !p.collected);
-  for (let iter = 0; iter < 30; iter++) {
+  for (let iter = 0; iter < 60; iter++) {
     let moved = false;
     for (let i = 0; i < active.length; i++) {
       const a = active[i];
@@ -1202,7 +1212,7 @@ function separateFromOverlaps(primaryPiece, ignoreIds = []) {
   const ignore = new Set(ignoreIds);
   const baseRadius = getPieceCollisionRadius(primaryPiece);
 
-  for (let iter = 0; iter < 10; iter++) {
+  for (let iter = 0; iter < 16; iter++) {
     let moved = false;
     for (const other of state.pieces) {
       if (!other?.sprite || other.id === primaryPiece.id || other.collected || ignore.has(other.id)) continue;
