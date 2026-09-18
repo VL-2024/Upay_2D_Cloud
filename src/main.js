@@ -603,11 +603,11 @@ function strikeTarget(source, target, snap) {
       return;
     }
 
-    updateSlotDom(nextSlot, target.textureKey);
-    updateProgress();
     animateToSlot(target, nextSlot, source, () => {
       target.collected = true;
       target.sprite = null;
+      updateSlotDom(nextSlot, target.textureKey);
+      updateProgress();
       const after = scenario.snapshot();
       if (after.finished) {
         state.phase = 'settled';
@@ -1144,7 +1144,7 @@ function nudgeNearbyPieces(targetPiece, sourcePiece) {
   const h = app.renderer.height;
 
   state.pieces.forEach(p => {
-    if (!p.sprite || p.id === targetPiece.id || p.id === sourcePiece.id || p.collected) return;
+    if (!p.sprite || p.type === 'khan' || p.id === targetPiece.id || p.id === sourcePiece.id || p.collected) return;
 
     const rx = p.sprite.x - tx;
     const ry = p.sprite.y - ty;
