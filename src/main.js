@@ -46,6 +46,8 @@ const app = new Application();
 await app.init({ resizeTo: host, backgroundAlpha: 0, antialias: true });
 host.appendChild(app.canvas);
 app.stage.sortableChildren = true;
+app.stage.eventMode = 'static';
+app.stage.hitArea = app.screen;
 
 applySceneLayout();
 
@@ -65,16 +67,23 @@ selectionRing.visible = false;
 selectionRing.zIndex = 50;
 fxLayer.addChild(selectionRing);
 
+const aimGuide = new Graphics();
+aimGuide.visible = false;
+aimGuide.zIndex = 55;
+fxLayer.addChild(aimGuide);
+
+let bitaDrag = null;
+
 setupUI();
 startNewGame();
 window.addEventListener('resize', () => scheduleSceneRebuild());
 
 let pendingRebuildTimer = null;
 function scheduleSceneRebuild() {
-  if (state.phase === 'animating') {
+  if (state.phase === 'animating' || bitaDrag) {
     if (pendingRebuildTimer) return;
     pendingRebuildTimer = setInterval(() => {
-      if (state.phase === 'animating') return;
+      if (state.phase === 'animating' || bitaDrag) return;
       clearInterval(pendingRebuildTimer);
       pendingRebuildTimer = null;
       rebuildPieceSprites(false);
@@ -321,6 +330,7 @@ function ensureSlots(zoneId, startIndex) {
 
 function startNewGame() {
   if (state.phase === 'animating') return;
+  if (bitaDrag) cancelBitaDrag();
   closeStakeMenu();
   state.phase = 'idle';
   state.selectedSourceId = null;
@@ -499,7 +509,7 @@ function rebuildPieceSprites(animate) {
     sprite.anchor.set(0.5);
     sprite.eventMode = 'static';
     sprite.cursor = 'pointer';
-    sprite.on('pointertap', () => onPieceTap(p));
+    sprite.on('pointerdown', () => onPiecePointerDown(p));
     p.sprite = sprite;
     pieceLayer.addChild(sprite);
     positionSprite(p);
@@ -522,8 +532,9 @@ function positionSprite(p) {
   p.sprite.zIndex = p.type === 'khan' ? 20 : 5;
 }
 
-function onPieceTap(piece) {
+function onPiecePointerDown(piece) {
   if (piece.collected || state.phase === 'animating' || state.phase === 'settled') return;
+  if (bitaDrag) return;
 
   const snap = scenario.snapshot();
   if (piece.type === 'khan') return onKhanTap(piece, snap);
@@ -544,26 +555,17 @@ function onPieceTap(piece) {
     state.selectedSourceId = piece.id;
     state.phase = 'aiming';
     pulseSprite(piece.sprite, 0.08);
-    setObjective('Выбери чуко в таком же положении');
+    setObjective('Оттяни чуко назад и прицелься');
     refreshPieceVisuals();
     return;
   }
 
   if (source.id === piece.id) {
-    state.selectedSourceId = null;
-    state.phase = 'idle';
-    setObjectiveFromScenario();
-    refreshPieceVisuals();
+    startBitaDrag(source);
     return;
   }
 
-  if (!isValidTarget(source, piece)) {
-    flashObjective('Бить можно только по чуко в том же положении');
-    pulseSprite(piece.sprite, 0.08);
-    return;
-  }
-
-  strikeTarget(source, piece, snap);
+  flashObjective('Оттяни выбранную фишку и прицелься');
 }
 
 function onKhanTap(khanPiece, snap) {
@@ -581,10 +583,11 @@ function onKhanTap(khanPiece, snap) {
   refreshPieceVisuals();
 }
 
-function strikeTarget(source, target, snap) {
+function strikeTargetWithArc(source, target, snap, launchX, launchY) {
   state.phase = 'animating';
   syncSelectorLock();
   state.selectedSourceId = null;
+  clearAimGuide();
   refreshPieceVisuals();
 
   const success = !snap.failedStrikeRequired && scenario.canCollectNormal();
@@ -643,29 +646,207 @@ function strikeTarget(source, target, snap) {
     });
   };
 
-  animateStrike(source, target, {
-    onImpact: () => {
-      impactBurst(target.sprite.x, target.sprite.y);
-      nudgeNearbyPieces(target, source);
-      if (success) shakeHost(2, 10);
+  animateArcFlight(source, launchX, launchY, target.sprite.x, target.sprite.y, () => {
+    impactBurst(target.sprite.x, target.sprite.y);
+    nudgeNearbyPieces(target, source);
+    if (success) shakeHost(2, 10);
 
-      if (snap.failedStrikeRequired || !success) {
-        animateMissReaction(target, shot, () => {
-          targetDone = true;
-          finalize();
-        });
-      } else {
-        animateKickOutToEdge(target, shot, () => {
-          targetDone = true;
-          finalize();
-        });
-      }
-    },
-    onFinish: () => {
+    if (snap.failedStrikeRequired || !success) {
+      animateMissReaction(target, shot, () => {
+        targetDone = true;
+        finalize();
+      });
+    } else {
+      animateKickOutToEdge(target, shot, () => {
+        targetDone = true;
+        finalize();
+      });
+    }
+
+    animateSourceSettleAfterArc(source, [target.id], () => {
       sourceDone = true;
       finalize();
-    }
+    });
   });
+}
+
+function startBitaDrag(piece) {
+  if (!piece?.sprite) return;
+  bitaDrag = {
+    piece,
+    startX: piece.sprite.x,
+    startY: piece.sprite.y,
+    baseRotation: piece.sprite.rotation,
+    guide: null,
+    power: 0,
+    aimedTargetId: null,
+  };
+  app.stage.on('pointermove', onBitaPointerMove);
+  piece.sprite.on('pointerup', onBitaPointerUp);
+  piece.sprite.on('pointerupoutside', onBitaPointerUp);
+  refreshPieceVisuals();
+}
+
+function onBitaPointerMove(event) {
+  if (!bitaDrag) return;
+  const sprite = bitaDrag.piece.sprite;
+  if (!sprite) return;
+  const tuning = CONFIG.throwTuning;
+  const p = event.global;
+  const pullX = p.x - bitaDrag.startX;
+  const pullY = p.y - bitaDrag.startY;
+  const pullLen = Math.hypot(pullX, pullY);
+
+  if (pullLen < 1) {
+    bitaDrag.guide = null;
+    bitaDrag.power = 0;
+    sprite.x = bitaDrag.startX;
+    sprite.y = bitaDrag.startY;
+    sprite.rotation = bitaDrag.baseRotation;
+  } else {
+    const guide = { x: -pullX / pullLen, y: -pullY / pullLen };
+    const capped = Math.min(tuning.maxPull, pullLen);
+    bitaDrag.guide = guide;
+    bitaDrag.power = capped / tuning.maxPull;
+    sprite.x = bitaDrag.startX - guide.x * capped;
+    sprite.y = bitaDrag.startY - guide.y * capped;
+    sprite.rotation = bitaDrag.baseRotation + (bitaDrag.startX - sprite.x) * tuning.rotationPerPull;
+  }
+
+  updateAimHighlight();
+  drawAimGuide();
+  updateSelectionRing();
+}
+
+function updateAimHighlight() {
+  if (!bitaDrag) return;
+  const tuning = CONFIG.throwTuning;
+  const targets = getValidTargets(bitaDrag.piece);
+  let aimedId = null;
+
+  if (bitaDrag.guide && bitaDrag.power >= tuning.minPowerToAim && targets.length) {
+    let best = null;
+    let bestAngle = Infinity;
+    for (const t of targets) {
+      if (!t.sprite) continue;
+      const dx = t.sprite.x - bitaDrag.startX;
+      const dy = t.sprite.y - bitaDrag.startY;
+      const dist = Math.hypot(dx, dy) || 1;
+      const dot = clamp((dx / dist) * bitaDrag.guide.x + (dy / dist) * bitaDrag.guide.y, -1, 1);
+      const angleDeg = Math.acos(dot) * 180 / Math.PI;
+      if (angleDeg < bestAngle) {
+        bestAngle = angleDeg;
+        best = t;
+      }
+    }
+    if (best && bestAngle <= tuning.aimToleranceDeg) aimedId = best.id;
+  }
+
+  if (bitaDrag.aimedTargetId !== aimedId) {
+    bitaDrag.aimedTargetId = aimedId;
+    refreshPieceVisuals();
+  }
+}
+
+function drawAimGuide() {
+  aimGuide.clear();
+  if (!bitaDrag || !bitaDrag.guide || bitaDrag.power < CONFIG.throwTuning.minPowerToAim) {
+    aimGuide.visible = false;
+    return;
+  }
+  const tuning = CONFIG.throwTuning;
+  aimGuide.visible = true;
+  const startX = bitaDrag.startX;
+  const startY = bitaDrag.startY;
+  const aimedTarget = bitaDrag.aimedTargetId ? state.pieces.find(p => p.id === bitaDrag.aimedTargetId) : null;
+  const color = aimedTarget ? tuning.aimedColor : tuning.unaimedGuideColor;
+  const len = aimedTarget?.sprite
+    ? Math.hypot(aimedTarget.sprite.x - startX, aimedTarget.sprite.y - startY)
+    : 150 + bitaDrag.power * 90;
+  const ux = bitaDrag.guide.x;
+  const uy = bitaDrag.guide.y;
+  const dash = 14;
+  const gap = 9;
+  for (let d = 0; d < len; d += dash + gap) {
+    const d2 = Math.min(len, d + dash);
+    aimGuide.moveTo(startX + ux * d, startY + uy * d).lineTo(startX + ux * d2, startY + uy * d2);
+  }
+  aimGuide.stroke({ color, width: 4, alpha: 0.85, cap: 'round' });
+  if (aimedTarget) {
+    aimGuide.circle(startX + ux * len, startY + uy * len, 5).fill({ color, alpha: 0.9 });
+  }
+}
+
+function clearAimGuide() {
+  aimGuide.clear();
+  aimGuide.visible = false;
+}
+
+function onBitaPointerUp() {
+  if (!bitaDrag) return;
+  const drag = bitaDrag;
+  bitaDrag = null;
+  app.stage.off('pointermove', onBitaPointerMove);
+  drag.piece.sprite?.off('pointerup', onBitaPointerUp);
+  drag.piece.sprite?.off('pointerupoutside', onBitaPointerUp);
+  clearAimGuide();
+
+  const source = drag.piece;
+  if (!source?.sprite) {
+    refreshPieceVisuals();
+    return;
+  }
+
+  const tuning = CONFIG.throwTuning;
+  const target = drag.aimedTargetId ? state.pieces.find(p => p.id === drag.aimedTargetId && !p.collected) : null;
+
+  if (!target || drag.power < tuning.minPowerToAim) {
+    animateSnapBack(source, drag.startX, drag.startY, drag.baseRotation);
+    if (drag.power < tuning.minPowerToKeepSelection) {
+      state.selectedSourceId = null;
+      state.phase = 'idle';
+      setObjectiveFromScenario();
+    }
+    refreshPieceVisuals();
+    return;
+  }
+
+  const launchX = source.sprite.x;
+  const launchY = source.sprite.y;
+  const snap = scenario.snapshot();
+  strikeTargetWithArc(source, target, snap, launchX, launchY);
+}
+
+function cancelBitaDrag() {
+  if (!bitaDrag) return;
+  app.stage.off('pointermove', onBitaPointerMove);
+  bitaDrag.piece.sprite?.off('pointerup', onBitaPointerUp);
+  bitaDrag.piece.sprite?.off('pointerupoutside', onBitaPointerUp);
+  bitaDrag = null;
+  clearAimGuide();
+}
+
+function animateSnapBack(piece, x, y, rotation) {
+  const sprite = piece.sprite;
+  if (!sprite) return;
+  const sx = sprite.x, sy = sprite.y, sr = sprite.rotation;
+  let f = 0;
+  const duration = 10;
+  app.ticker.add(tick);
+  function tick() {
+    f++;
+    const t = Math.min(1, f / duration);
+    const e = easeOutCubic(t);
+    sprite.x = sx + (x - sx) * e;
+    sprite.y = sy + (y - sy) * e;
+    sprite.rotation = sr + (rotation - sr) * e;
+    if (t >= 1) {
+      sprite.x = x;
+      sprite.y = y;
+      sprite.rotation = rotation;
+      app.ticker.remove(tick);
+    }
+  }
 }
 
 function canUseAsSource(piece) {
@@ -691,7 +872,9 @@ function getKhanPiece() {
 function refreshPieceVisuals() {
   const snap = scenario.snapshot();
   const source = getSelectedSource();
-  const validTargetIds = new Set(source ? getValidTargets(source).map(p => p.id) : []);
+  const dragging = !!bitaDrag;
+  const aimedId = bitaDrag?.aimedTargetId || null;
+  const validTargetIds = new Set(source && !dragging ? getValidTargets(source).map(p => p.id) : []);
 
   hintLayer.removeChildren();
 
@@ -700,26 +883,29 @@ function refreshPieceVisuals() {
     const selected = p.id === state.selectedSourceId;
     const selectableSource = !source && canUseAsSource(p);
     const validTarget = validTargetIds.has(p.id);
+    const aimed = dragging && p.id === aimedId;
     const inPoseFilter = !!state.activePoseFilter && p.type === 'normal' && poseNameForIndex(p.poseIndex) === state.activePoseFilter;
 
     const baseTint = 0xffffff;
     let displayTint = baseTint;
     if (selected) displayTint = mixHex(baseTint, 0xf4fbff, 0.14);
+    else if (aimed) displayTint = mixHex(baseTint, 0xf5ffb0, 0.16);
     else if (validTarget) displayTint = mixHex(baseTint, 0xfff3cf, 0.12);
     else if (selectableSource) displayTint = mixHex(baseTint, 0xf2fcff, 0.10);
     else if (inPoseFilter) displayTint = mixHex(baseTint, 0xffffff, 0.05);
     p.sprite.tint = displayTint;
 
     let alpha = 0.96;
-    if (source) alpha = (selected || validTarget || p.type === 'khan') ? 1 : 0.56;
+    if (source) alpha = (selected || validTarget || aimed || p.type === 'khan') ? 1 : (dragging ? 0.5 : 0.56);
     else if (state.activePoseFilter) alpha = inPoseFilter || p.type === 'khan' ? 1 : 0.40;
     else alpha = selectableSource || p.type === 'khan' ? 1 : 0.90;
     if (p.type === 'khan' && !snap.khanActive) alpha = Math.min(alpha, 0.96);
     p.sprite.alpha = alpha;
-    p.sprite.zIndex = selected ? 40 : validTarget ? 24 : (p.type === 'khan' ? 20 : 5);
+    p.sprite.zIndex = selected ? 40 : (validTarget || aimed) ? 24 : (p.type === 'khan' ? 20 : 5);
 
     if (selectableSource) addHintMarker(p, 0x68d9ff, 0.11, 0.90);
-    if (validTarget) addHintMarker(p, 0xf0c66c, 0.16, 1.08);
+    if (aimed) addHintMarker(p, CONFIG.throwTuning.aimedColor, 0.24, 1.22);
+    else if (validTarget) addHintMarker(p, 0xf0c66c, 0.16, 1.08);
     if (inPoseFilter && !source) addHintMarker(p, 0xffffff, 0.08, 1.02);
   }
   updateSelectionRing();
@@ -890,81 +1076,71 @@ function animateScatterIn(piece) {
   }
 }
 
-function animateStrike(source, target, { onImpact, onFinish }) {
-  const sprite = source.sprite;
-  const targetSprite = target.sprite;
-  if (!sprite || !targetSprite) {
-    onImpact?.();
-    onFinish?.();
-    return;
-  }
+function animateArcFlight(piece, startX, startY, targetX, targetY, onImpact) {
+  const sprite = piece.sprite;
+  if (!sprite) return onImpact?.();
 
-  const startX = sprite.x;
-  const startY = sprite.y;
-  const startR = sprite.rotation;
-  const dx = targetSprite.x - sprite.x;
-  const dy = targetSprite.y - sprite.y;
+  const dx = targetX - startX;
+  const dy = targetY - startY;
   const dist = Math.max(1, Math.hypot(dx, dy));
   const ux = dx / dist;
   const uy = dy / dist;
+  const impactGap = Math.max(sprite.width * 0.16, 14);
+  const impactX = targetX - ux * impactGap;
+  const impactY = targetY - uy * impactGap;
 
-  const back = clamp(dist * 0.10, 7, 18);
-  const impactGap = Math.max(targetSprite.width * 0.13, 12);
-  const impactX = targetSprite.x - ux * impactGap;
-  const impactY = targetSprite.y - uy * impactGap;
+  const tuning = CONFIG.throwTuning;
+  const arcCx = (startX + impactX) / 2;
+  const arcCy = Math.min(startY, impactY) - tuning.arcHeight;
+  const baseScale = sprite.scale.x;
+  const startRotation = piece.rotation;
+  const origZ = sprite.zIndex;
 
-  const rebound = clamp(dist * 0.09, 8, 16);
-  const side = (Math.random() - 0.5) * clamp(targetSprite.width * 0.05, 2, 6);
-  const reboundX = impactX - ux * rebound + (-uy) * side;
-  const reboundY = impactY - uy * rebound + ux * side;
-  const settleX = reboundX + ux * 2.5;
-  const settleY = reboundY + uy * 1.5;
+  sprite.x = startX;
+  sprite.y = startY;
+  sprite.rotation = startRotation;
+  sprite.zIndex = 60;
 
   let f = 0;
-  let impacted = false;
-  const duration = 28;
+  const duration = tuning.flightDurationFrames;
   app.ticker.add(tick);
-
   function tick() {
     f++;
     const t = Math.min(1, f / duration);
-
-    if (t < 0.18) {
-      const e = easeOutCubic(t / 0.18);
-      sprite.x = startX - ux * back * e;
-      sprite.y = startY - uy * back * e;
-      sprite.rotation = startR - 0.10 * e + Math.sin(Math.PI * e) * 0.05;
-    } else if (t < 0.58) {
-      const e = easeOutCubic((t - 0.18) / 0.40);
-      const fromX = startX - ux * back;
-      const fromY = startY - uy * back;
-      sprite.x = fromX + (impactX - fromX) * e;
-      sprite.y = fromY + (impactY - fromY) * e - Math.sin(Math.PI * e) * 5.5;
-      sprite.rotation = startR - 0.10 + 0.55 * e + Math.sin(Math.PI * e) * 0.08;
-      if (!impacted && e >= 0.80) {
-        impacted = true;
-        onImpact?.();
-      }
-    } else if (t < 0.82) {
-      const e = easeOutCubic((t - 0.58) / 0.24);
-      sprite.x = impactX + (reboundX - impactX) * e;
-      sprite.y = impactY + (reboundY - impactY) * e - Math.sin(Math.PI * e) * 6;
-      sprite.rotation = startR + 0.45 - 0.34 * e + Math.sin(Math.PI * e) * 0.10;
-    } else {
-      const e = easeOutCubic((t - 0.82) / 0.18);
-      sprite.x = reboundX + (settleX - reboundX) * e;
-      sprite.y = reboundY + (settleY - reboundY) * e;
-      sprite.rotation = startR + 0.11 - 0.05 * e;
-    }
-
+    const omt = 1 - t;
+    sprite.x = omt * omt * startX + 2 * omt * t * arcCx + t * t * impactX;
+    sprite.y = omt * omt * startY + 2 * omt * t * arcCy + t * t * impactY;
+    const lift = Math.sin(Math.PI * t);
+    sprite.scale.set(baseScale * (1 + lift * tuning.arcScaleBoost));
+    sprite.rotation = startRotation + t * 1.05;
     if (t >= 1) {
-      sprite.x = settleX;
-      sprite.y = settleY;
-      sprite.rotation = startR + 0.06;
-      separateFromOverlaps(source, [target.id]);
       app.ticker.remove(tick);
-      if (!impacted) onImpact?.();
-      onFinish?.();
+      sprite.x = impactX;
+      sprite.y = impactY;
+      sprite.scale.set(baseScale);
+      sprite.zIndex = origZ;
+      onImpact?.();
+    }
+  }
+}
+
+function animateSourceSettleAfterArc(piece, ignoreIds, onDone) {
+  const sprite = piece.sprite;
+  if (!sprite) return onDone?.();
+  const sr = sprite.rotation;
+  let f = 0;
+  const duration = 14;
+  app.ticker.add(tick);
+  function tick() {
+    f++;
+    const t = Math.min(1, f / duration);
+    const e = easeOutCubic(t);
+    sprite.rotation = sr + Math.sin(Math.PI * e) * 0.08;
+    if (t >= 1) {
+      sprite.rotation = sr;
+      separateFromOverlaps(piece, ignoreIds);
+      app.ticker.remove(tick);
+      onDone?.();
     }
   }
 }

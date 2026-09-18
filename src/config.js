@@ -33,5 +33,17 @@ export const CONFIG = {
   ui: {
     selectedTint: 0xdaf6ff,
     selectedGlow: 0x6ac7ff,
-  }
+  },
+  throwTuning: {
+    maxPull: 110,
+    minPowerToAim: 0.08,
+    minPowerToKeepSelection: 0.06,
+    aimToleranceDeg: 46,
+    arcHeight: 120,
+    arcScaleBoost: 0.14,
+    flightDurationFrames: 26,
+    rotationPerPull: 0.0026,
+    aimedColor: 0xdbe63c,
+    unaimedGuideColor: 0x8fb3d6,
+  },
 };
