@@ -448,7 +448,7 @@ function randomizeLayout() {
 
 function resolveAllPieceOverlaps() {
   const active = state.pieces.filter(p => p?.sprite && !p.collected);
-  for (let iter = 0; iter < 18; iter++) {
+  for (let iter = 0; iter < 30; iter++) {
     let moved = false;
     for (let i = 0; i < active.length; i++) {
       const a = active[i];
@@ -456,7 +456,7 @@ function resolveAllPieceOverlaps() {
         const b = active[j];
         const ra = getPieceCollisionRadius(a);
         const rb = getPieceCollisionRadius(b);
-        const minDist = ra + rb * (b.type === 'khan' || a.type === 'khan' ? 0.98 : 0.94);
+        const minDist = (ra + rb) * (b.type === 'khan' || a.type === 'khan' ? 1.10 : 1.08);
         const dx = b.sprite.x - a.sprite.x;
         const dy = b.sprite.y - a.sprite.y;
         const dist = Math.hypot(dx, dy) || 0.001;
@@ -810,11 +810,9 @@ function onBitaPointerUp() {
 
   if (!target || drag.power < tuning.minPowerToAim) {
     animateSnapBack(source, drag.startX, drag.startY, drag.baseRotation);
-    if (drag.power < tuning.minPowerToKeepSelection) {
-      state.selectedSourceId = null;
-      state.phase = 'idle';
-      setObjectiveFromScenario();
-    }
+    state.selectedSourceId = null;
+    state.phase = 'idle';
+    setObjectiveFromScenario();
     refreshPieceVisuals();
     return;
   }
@@ -1180,7 +1178,7 @@ function getCarpetBoundaryPoint(ux, uy, padding = 0) {
 function getPieceCollisionRadius(piece) {
   const sprite = piece?.sprite;
   if (!sprite) return 22;
-  return Math.max(16, Math.min(sprite.width, sprite.height) * 0.28);
+  return Math.max(16, Math.min(sprite.width, sprite.height) * 0.33);
 }
 
 function keepPointInsideCarpet(x, y, padding = 0) {
@@ -1204,11 +1202,11 @@ function separateFromOverlaps(primaryPiece, ignoreIds = []) {
   const ignore = new Set(ignoreIds);
   const baseRadius = getPieceCollisionRadius(primaryPiece);
 
-  for (let iter = 0; iter < 6; iter++) {
+  for (let iter = 0; iter < 10; iter++) {
     let moved = false;
     for (const other of state.pieces) {
       if (!other?.sprite || other.id === primaryPiece.id || other.collected || ignore.has(other.id)) continue;
-      const minDist = baseRadius + getPieceCollisionRadius(other) * (other.type === 'khan' ? 0.96 : 0.92);
+      const minDist = (baseRadius + getPieceCollisionRadius(other)) * (other.type === 'khan' ? 1.08 : 1.06);
       const dx = sprite.x - other.sprite.x;
       const dy = sprite.y - other.sprite.y;
       const dist = Math.hypot(dx, dy) || 0.0001;

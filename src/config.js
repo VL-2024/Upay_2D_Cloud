@@ -17,8 +17,8 @@ export const CONFIG = {
     edgeOutset: 0.038,
     chukoScaleMultiplier: 1.16,
     khanScaleMultiplier: 1,
-    pileSpreadScale: 0.71,
-    pileSpreadHeightScale: 1.01,
+    pileSpreadScale: 0.62,
+    pileSpreadHeightScale: 1.17,
   },
   pieces: {
     normalCount: 15,
@@ -37,7 +37,6 @@ export const CONFIG = {
   throwTuning: {
     maxPull: 110,
     minPowerToAim: 0.08,
-    minPowerToKeepSelection: 0.06,
     aimToleranceDeg: 46,
     arcHeight: 120,
     arcScaleBoost: 0.14,
