@@ -67,7 +67,22 @@ fxLayer.addChild(selectionRing);
 
 setupUI();
 startNewGame();
-window.addEventListener('resize', () => rebuildPieceSprites(false));
+window.addEventListener('resize', () => scheduleSceneRebuild());
+
+let pendingRebuildTimer = null;
+function scheduleSceneRebuild() {
+  if (state.phase === 'animating') {
+    if (pendingRebuildTimer) return;
+    pendingRebuildTimer = setInterval(() => {
+      if (state.phase === 'animating') return;
+      clearInterval(pendingRebuildTimer);
+      pendingRebuildTimer = null;
+      rebuildPieceSprites(false);
+    }, 50);
+    return;
+  }
+  rebuildPieceSprites(false);
+}
 
 async function loadTextures() {
   const loaded = {};
