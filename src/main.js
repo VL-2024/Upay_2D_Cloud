@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs';
+import { Application, Assets, Circle, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs';
 import { CONFIG } from './config.js';
 import { ScenarioEngine, SCENARIOS } from './scenario-engine.js';
 
@@ -509,6 +509,10 @@ function rebuildPieceSprites(animate) {
     sprite.anchor.set(0.5);
     sprite.eventMode = 'static';
     sprite.cursor = 'pointer';
+    if (p.type === 'khan') {
+      const hitRadius = Math.min(sprite.texture.width, sprite.texture.height) * 0.30;
+      sprite.hitArea = new Circle(0, 0, hitRadius);
+    }
     sprite.on('pointerdown', () => onPiecePointerDown(p));
     p.sprite = sprite;
     pieceLayer.addChild(sprite);
@@ -554,9 +558,9 @@ function onPiecePointerDown(piece) {
     }
     state.selectedSourceId = piece.id;
     state.phase = 'aiming';
-    pulseSprite(piece.sprite, 0.08);
-    setObjective('Оттяни чуко назад и прицелься');
+    setObjective('Прицелься и отпусти для удара');
     refreshPieceVisuals();
+    startBitaDrag(piece);
     return;
   }
 
@@ -580,6 +584,10 @@ function onKhanTap(khanPiece, snap) {
   setObjective(scenario.resultText());
   syncSelectorLock();
   celebrateKhan(khanPiece);
+  const angle = Math.random() * Math.PI * 2;
+  animateKickOutToEdge(khanPiece, { ux: Math.cos(angle), uy: Math.sin(angle) }, () => {
+    khanPiece.collected = true;
+  });
   refreshPieceVisuals();
 }
 
