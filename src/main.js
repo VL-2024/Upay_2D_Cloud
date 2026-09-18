@@ -1115,9 +1115,15 @@ function animateMissReaction(piece, shot, onDone) {
 
 function pulseSprite(sprite, intensity = 0.12) {
   if (!sprite) return;
-  const base = sprite.scale.x;
+  if (sprite.__pulseTick) {
+    app.ticker.remove(sprite.__pulseTick);
+    sprite.scale.set(sprite.__pulseBase);
+  }
+  const base = sprite.__pulseBase ?? sprite.scale.x;
+  sprite.__pulseBase = base;
   let f = 0;
   const duration = 16;
+  sprite.__pulseTick = tick;
   app.ticker.add(tick);
   function tick() {
     f++;
@@ -1127,6 +1133,10 @@ function pulseSprite(sprite, intensity = 0.12) {
     if (t >= 1) {
       sprite.scale.set(base);
       app.ticker.remove(tick);
+      if (sprite.__pulseTick === tick) {
+        sprite.__pulseTick = null;
+        sprite.__pulseBase = null;
+      }
     }
   }
 }
