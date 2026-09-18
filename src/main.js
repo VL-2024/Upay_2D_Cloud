@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Graphics, Sprite } from 'https://cdn.jsdelivr.net/npm/pixi.js@8.2.6/+esm';
+import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs';
 import { CONFIG } from './config.js';
 import { ScenarioEngine, SCENARIOS } from './scenario-engine.js';
 
