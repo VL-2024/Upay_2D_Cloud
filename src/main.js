@@ -1,4 +1,4 @@
-import { Application, Assets, Circle, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs';
+import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs';
 import { CONFIG } from './config.js';
 import { ScenarioEngine, SCENARIOS } from './scenario-engine.js';
 
@@ -14,15 +14,6 @@ const khanFiles = [
   './assets/khan/khan_03.webp',
 ];
 
-const poseGroups = ['Айкүр', 'Таа', 'Бөк', 'Чик'];
-const poseHelpLabels = ['Айкүр', 'Таа', 'Бөк', 'Чик'];
-const poseUiColors = {
-  'Айкүр': '#2b66ff',
-  'Таа': '#31b84d',
-  'Бөк': '#ff4fb6',
-  'Чик': '#ff9d20',
-};
-
 const scenario = new ScenarioEngine();
 const DEFAULT_SCENE = JSON.parse(JSON.stringify(CONFIG.scene));
 const DEFAULT_PIECES = JSON.parse(JSON.stringify(CONFIG.pieces));
@@ -33,12 +24,11 @@ const state = {
   currency: CONFIG.currency,
   phase: 'idle',
   pieces: [],
-  slots: Array(CONFIG.zones.totalSlots).fill(null),
   selectedSourceId: null,
   lastObjective: '',
   demoHasStarted: false,
   externalScenarioCode: null,
-  activePoseFilter: null,
+  strikeHistory: { stage1: [], stage2: [], khan: null },
 };
 
 const host = document.getElementById('pixiHost');
@@ -133,8 +123,6 @@ function getSceneMetrics() {
 }
 
 function setupUI() {
-  ensureSlots('zone1', 0);
-  ensureSlots('zone2', 3);
   renderStakeMenu();
   syncStakeUI();
 
@@ -157,18 +145,8 @@ function setupUI() {
   });
 
   document.getElementById('newGameBtn').addEventListener('click', startNewGame);
-  renderPoseHelpPanel();
   setupSceneSettingsUI();
   updatePrimaryButton();
-  document.getElementById('poseHelpButtons').addEventListener('click', (e) => {
-    const btn = e.target.closest('.pose-help-btn');
-    if (!btn) return;
-    togglePoseFilter(btn.dataset.pose || null);
-  });
-  document.getElementById('poseHelpToggle').addEventListener('click', () => {
-    const panel = document.getElementById('poseHelpPanel');
-    panel.classList.toggle('collapsed');
-  });
 }
 
 function setupSceneSettingsUI() {
@@ -254,25 +232,6 @@ function setupSceneSettingsUI() {
   apply(false);
 }
 
-function renderPoseHelpPanel() {
-  const wrap = document.getElementById('poseHelpButtons');
-  wrap.innerHTML = poseHelpLabels.map(label => `<button type="button" class="pose-help-btn" data-pose="${label}" style="--pose-color:${poseUiColors[label]}">${label}</button>`).join('');
-  syncPoseHelpPanel();
-}
-
-function togglePoseFilter(label) {
-  state.activePoseFilter = state.activePoseFilter === label ? null : label;
-  syncPoseHelpPanel();
-  resolveAllPieceOverlaps();
-  refreshPieceVisuals();
-}
-
-function syncPoseHelpPanel() {
-  document.querySelectorAll('.pose-help-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.pose === state.activePoseFilter);
-  });
-}
-
 function updatePrimaryButton() {
   const btn = document.getElementById('newGameBtn');
   if (!btn) return;
@@ -280,7 +239,7 @@ function updatePrimaryButton() {
   const snap = scenario.snapshot();
   if (state.phase === 'animating') label = 'ИДЁТ УДАР';
   else if (state.phase === 'aiming' && state.selectedSourceId) label = 'БРОСОК / УДАР';
-  else if (!snap.finished && state.pieces.length) label = snap.khanActive ? 'ВЫБЕЙ ХАНА' : 'ВЫБЕРИ БИТУ';
+  else if (!snap.finished && state.pieces.length) label = snap.stage === 'khan' ? 'ВЫБЕЙ ХАНА' : 'ВЫБЕРИ БИТУ';
   btn.innerHTML = `${label}<small id="betLabel">${state.denomination} ${state.currency}</small>`;
   btn.classList.toggle('is-active-turn', label !== 'НОВАЯ ИГРА');
   btn.classList.toggle('is-busy', label === 'ИДЁТ УДАР');
@@ -327,24 +286,13 @@ function closeStakeMenu() {
   document.getElementById('stakeSelect').setAttribute('aria-expanded', 'false');
 }
 
-function ensureSlots(zoneId, startIndex) {
-  const zone = document.getElementById(zoneId);
-  zone.innerHTML = '';
-  for (let i = 0; i < CONFIG.zones.slotsPerUpay; i++) {
-    const slot = document.createElement('div');
-    slot.className = 'slot';
-    slot.dataset.slotIndex = String(startIndex + i);
-    zone.appendChild(slot);
-  }
-}
-
 function startNewGame() {
   if (state.phase === 'animating') return;
   if (bitaDrag) cancelBitaDrag();
   closeStakeMenu();
   state.phase = 'idle';
   state.selectedSourceId = null;
-  state.slots = Array(CONFIG.zones.totalSlots).fill(null);
+  state.strikeHistory = { stage1: [], stage2: [], khan: null };
 
   const demoMode = document.getElementById('demoToggle').checked;
   if (state.externalScenarioCode) {
@@ -358,8 +306,7 @@ function startNewGame() {
   }
 
   buildPieces();
-  resetSlotDom();
-  updateProgress();
+  renderStrikeTrack();
   setObjectiveFromScenario();
   rebuildPieceSprites(true);
   syncSelectorLock();
@@ -517,13 +464,13 @@ function rebuildPieceSprites(animate) {
     if (p.collected) continue;
     const sprite = new Sprite(textures[p.textureKey]);
     sprite.anchor.set(0.5);
-    sprite.eventMode = 'static';
-    sprite.cursor = 'pointer';
-    if (p.type === 'khan') {
-      const hitRadius = Math.min(sprite.texture.width, sprite.texture.height) * 0.30;
-      sprite.hitArea = new Circle(0, 0, hitRadius);
+    if (p.type === 'normal') {
+      sprite.eventMode = 'static';
+      sprite.cursor = 'pointer';
+      sprite.on('pointerdown', () => onPiecePointerDown(p));
+    } else {
+      sprite.eventMode = 'none';
     }
-    sprite.on('pointerdown', () => onPiecePointerDown(p));
     p.sprite = sprite;
     pieceLayer.addChild(sprite);
     positionSprite(p);
@@ -549,20 +496,12 @@ function positionSprite(p) {
 function onPiecePointerDown(piece) {
   if (piece.collected || state.phase === 'animating' || state.phase === 'settled') return;
   if (bitaDrag) return;
-
-  const snap = scenario.snapshot();
-  if (piece.type === 'khan') return onKhanTap(piece, snap);
-
-  if (snap.khanActive) {
-    flashObjective('ХАН активирован — выбей Хана');
-    pulseSprite(getKhanPiece()?.sprite);
-    return;
-  }
+  if (piece.type !== 'normal') return;
 
   const source = getSelectedSource();
   if (!source) {
     if (!canUseAsSource(piece)) {
-      flashObjective('Нет пары в таком же положении — выбери другой чуко');
+      flashObjective('Эта фишка не может стать битой');
       pulseSprite(piece.sprite, 0.08);
       return;
     }
@@ -582,38 +521,24 @@ function onPiecePointerDown(piece) {
   flashObjective('Оттяни выбранную фишку и прицелься');
 }
 
-function onKhanTap(khanPiece, snap) {
-  if (!snap.khanActive) {
-    flashObjective(snap.khanRequired ? 'Сначала собери нужные чуко' : 'В этом сценарии Хан не используется');
-    pulseSprite(khanPiece.sprite);
-    return;
+function recordStrikeHistory(stage, hit) {
+  if (stage === 'khan') {
+    state.strikeHistory.khan = hit;
+  } else if (stage === 'stage1' || stage === 'stage2') {
+    state.strikeHistory[stage].push(hit);
   }
-  state.phase = 'settled';
-  state.selectedSourceId = null;
-  scenario.registerKhanHit();
-  setObjective(scenario.resultText());
-  syncSelectorLock();
-  celebrateKhan(khanPiece);
-  const angle = Math.random() * Math.PI * 2;
-  animateKickOutToEdge(khanPiece, { ux: Math.cos(angle), uy: Math.sin(angle) }, () => {
-    khanPiece.collected = true;
-  });
-  refreshPieceVisuals();
 }
 
-function strikeTargetWithArc(source, target, snap, launchX, launchY) {
+function strikeTargetWithArc(source, target, launchX, launchY) {
   state.phase = 'animating';
   syncSelectorLock();
   state.selectedSourceId = null;
   clearAimGuide();
   refreshPieceVisuals();
 
-  const success = !snap.failedStrikeRequired && scenario.canCollectNormal();
-  const nextSlot = success ? state.slots.findIndex(v => v === null) : -1;
-  if (success && nextSlot >= 0) {
-    state.slots[nextSlot] = { id: target.id, type: target.type, textureKey: target.textureKey };
-    scenario.registerCollection();
-  }
+  const stageAtStrike = scenario.snapshot().stage;
+  const { hit } = scenario.resolveStrike();
+  recordStrikeHistory(stageAtStrike, hit);
 
   const shot = getShotVector(source, target);
   let sourceDone = false;
@@ -622,60 +547,36 @@ function strikeTargetWithArc(source, target, snap, launchX, launchY) {
   const finalize = () => {
     if (!sourceDone || !targetDone) return;
 
-    if (snap.failedStrikeRequired) {
-      scenario.registerFailedStrike();
+    if (hit) {
+      target.collected = true;
+      if (target.type === 'khan') celebrateKhan(target);
+    }
+
+    renderStrikeTrack();
+    const after = scenario.snapshot();
+    if (after.finished) {
       state.phase = 'settled';
       setObjective(scenario.resultText());
-      syncSelectorLock();
-      refreshPieceVisuals();
-      return;
-    }
-
-    if (!success || nextSlot < 0) {
+    } else {
       state.phase = 'idle';
       setObjectiveFromScenario();
-      syncSelectorLock();
-      refreshPieceVisuals();
-      return;
     }
-
-    animateToSlot(target, nextSlot, source, () => {
-      target.collected = true;
-      target.sprite = null;
-      updateSlotDom(nextSlot, target.textureKey);
-      updateProgress();
-      const after = scenario.snapshot();
-      if (after.finished) {
-        state.phase = 'settled';
-        setObjective(scenario.resultText());
-      } else if (after.khanActive) {
-        state.phase = 'idle';
-        setObjective('ХАН активирован! Выбей Хана');
-        pulseSprite(getKhanPiece()?.sprite, 0.14);
-      } else if (after.failedStrikeRequired) {
-        state.phase = 'idle';
-        setObjective('Последний удар — попробуй выбить ещё один чуко');
-      } else {
-        state.phase = 'idle';
-        setObjectiveFromScenario();
-      }
-      syncSelectorLock();
-      refreshPieceVisuals();
-    });
+    syncSelectorLock();
+    refreshPieceVisuals();
   };
 
   animateArcFlight(source, launchX, launchY, target.sprite.x, target.sprite.y, () => {
     impactBurst(target.sprite.x, target.sprite.y);
     nudgeNearbyPieces(target, source);
-    if (success) shakeHost(2, 10);
+    if (hit) shakeHost(2, 10);
 
-    if (snap.failedStrikeRequired || !success) {
-      animateMissReaction(target, shot, () => {
+    if (hit) {
+      animateKickOutToEdge(target, shot, () => {
         targetDone = true;
         finalize();
       });
     } else {
-      animateKickOutToEdge(target, shot, () => {
+      animateMissReaction(target, shot, () => {
         targetDone = true;
         finalize();
       });
@@ -829,8 +730,7 @@ function onBitaPointerUp() {
 
   const launchX = source.sprite.x;
   const launchY = source.sprite.y;
-  const snap = scenario.snapshot();
-  strikeTargetWithArc(source, target, snap, launchX, launchY);
+  strikeTargetWithArc(source, target, launchX, launchY);
 }
 
 function cancelBitaDrag() {
@@ -870,7 +770,11 @@ function canUseAsSource(piece) {
 }
 
 function isValidTarget(source, target) {
-  return !!source && !!target && source.id !== target.id && source.type === 'normal' && target.type === 'normal' && !source.collected && !target.collected && source.poseIndex === target.poseIndex;
+  if (!source || !target || source.id === target.id) return false;
+  if (source.type !== 'normal' || source.collected || target.collected) return false;
+  const stage = scenario.snapshot().stage;
+  if (stage === 'khan') return target.type === 'khan';
+  return target.type === 'normal';
 }
 
 function getValidTargets(source) {
@@ -886,7 +790,6 @@ function getKhanPiece() {
 }
 
 function refreshPieceVisuals() {
-  const snap = scenario.snapshot();
   const source = getSelectedSource();
   const dragging = !!bitaDrag;
   const aimedId = bitaDrag?.aimedTargetId || null;
@@ -900,7 +803,6 @@ function refreshPieceVisuals() {
     const selectableSource = !source && canUseAsSource(p);
     const validTarget = validTargetIds.has(p.id);
     const aimed = dragging && p.id === aimedId;
-    const inPoseFilter = !!state.activePoseFilter && p.type === 'normal' && poseNameForIndex(p.poseIndex) === state.activePoseFilter;
 
     const baseTint = 0xffffff;
     let displayTint = baseTint;
@@ -908,24 +810,19 @@ function refreshPieceVisuals() {
     else if (aimed) displayTint = mixHex(baseTint, 0xf5ffb0, 0.16);
     else if (validTarget) displayTint = mixHex(baseTint, 0xfff3cf, 0.12);
     else if (selectableSource) displayTint = mixHex(baseTint, 0xf2fcff, 0.10);
-    else if (inPoseFilter) displayTint = mixHex(baseTint, 0xffffff, 0.05);
     p.sprite.tint = displayTint;
 
     let alpha = 0.96;
     if (source) alpha = (selected || validTarget || aimed || p.type === 'khan') ? 1 : (dragging ? 0.5 : 0.56);
-    else if (state.activePoseFilter) alpha = inPoseFilter || p.type === 'khan' ? 1 : 0.40;
     else alpha = selectableSource || p.type === 'khan' ? 1 : 0.90;
-    if (p.type === 'khan' && !snap.khanActive) alpha = Math.min(alpha, 0.96);
     p.sprite.alpha = alpha;
     p.sprite.zIndex = selected ? 40 : (validTarget || aimed) ? 24 : (p.type === 'khan' ? 20 : 5);
 
     if (selectableSource) addHintMarker(p, 0x68d9ff, 0.11, 0.90);
     if (aimed) addHintMarker(p, CONFIG.throwTuning.aimedColor, 0.24, 1.22);
     else if (validTarget) addHintMarker(p, 0xf0c66c, 0.16, 1.08);
-    if (inPoseFilter && !source) addHintMarker(p, 0xffffff, 0.08, 1.02);
   }
   updateSelectionRing();
-  syncPoseHelpPanel();
   updatePrimaryButton();
 }
 
@@ -963,36 +860,49 @@ function updateSelectionRing() {
   selectionRing.stroke({ color: 0xffffff, width: 1.5, alpha: 0.85 });
 }
 
-function resetSlotDom() {
-  document.querySelectorAll('.slot').forEach(slot => {
-    slot.innerHTML = '';
-    slot.classList.remove('filled');
-  });
-  document.getElementById('upayZone1').classList.remove('complete');
-  document.getElementById('upayZone2').classList.remove('complete');
+function renderPipRow(elId, history, total) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  let html = '';
+  for (let i = 0; i < total; i++) {
+    if (i < history.length) {
+      html += `<span class="pip ${history[i] ? 'is-hit' : 'is-miss'}"></span>`;
+    } else {
+      html += `<span class="pip is-pending"></span>`;
+    }
+  }
+  el.innerHTML = html;
 }
 
-function updateSlotDom(slotIndex, textureKey) {
-  const slot = document.querySelector(`.slot[data-slot-index="${slotIndex}"]`);
-  if (!slot) return;
-  const img = document.createElement('img');
-  img.src = textureKey.replace('./', '');
-  slot.innerHTML = '';
-  slot.appendChild(img);
-  slot.classList.add('filled');
-}
+function renderStrikeTrack() {
+  const snap = scenario.snapshot();
+  renderPipRow('pipsStage1', state.strikeHistory.stage1, 3);
 
-function updateProgress() {
-  const c1 = state.slots.slice(0, 3).filter(Boolean).length;
-  const c2 = state.slots.slice(3, 6).filter(Boolean).length;
-  document.getElementById('zone1Progress').textContent = `${c1}/3`;
-  document.getElementById('zone2Progress').textContent = `${c2}/3`;
-  document.getElementById('upayZone1').classList.toggle('complete', c1 === 3);
-  document.getElementById('upayZone2').classList.toggle('complete', c2 === 3);
-}
+  const stage2El = document.getElementById('strikeStage2');
+  const showStage2 = snap.stage === 'stage2' || snap.stage === 'khan' || state.strikeHistory.stage2.length > 0;
+  if (stage2El) {
+    stage2El.hidden = !showStage2;
+    if (showStage2) renderPipRow('pipsStage2', state.strikeHistory.stage2, 3);
+  }
 
-function scenarioLabel(code) {
-  return code.replace('_', ' + ');
+  const khanEl = document.getElementById('strikeKhan');
+  const showKhan = snap.stage === 'khan' || state.strikeHistory.khan !== null;
+  if (khanEl) {
+    khanEl.hidden = !showKhan;
+    if (showKhan) renderPipRow('pipsKhan', state.strikeHistory.khan === null ? [] : [state.strikeHistory.khan], 1);
+  }
+
+  const multEl = document.getElementById('strikeMultiplier');
+  if (multEl) {
+    if (snap.finished) {
+      multEl.hidden = false;
+      multEl.textContent = `×${snap.multiplier}`;
+      multEl.classList.toggle('is-zero', snap.multiplier === 0);
+      multEl.classList.toggle('is-max', snap.multiplier === 500);
+    } else {
+      multEl.hidden = true;
+    }
+  }
 }
 
 function setObjective(text) {
@@ -1003,11 +913,15 @@ function setObjective(text) {
 function setObjectiveFromScenario() {
   const snap = scenario.snapshot();
   let text = '';
-  if (snap.finished) text = scenario.resultText();
-  else if (snap.khanActive) text = 'ХАН активирован! Выбей Хана';
-  else if (snap.failedStrikeRequired) text = 'Последний удар — попробуй выбить ещё один чуко';
-  else if (snap.collected === 0) text = `DEMO ${scenarioLabel(snap.scenario)} • Выбери чуко-биту`;
-  else text = `DEMO ${scenarioLabel(snap.scenario)} • собрано ${snap.collected}/${snap.normalLimit}`;
+  if (snap.finished) {
+    text = scenario.resultText();
+  } else if (snap.stage === 'khan') {
+    text = 'Финальный удар — выбери биту и выбей Хана!';
+  } else if (snap.stage === 'stage2') {
+    text = `1 УПАЙ собран! Этап 2 — удар ${snap.strikeIndex + 1}/3`;
+  } else {
+    text = `Удар ${snap.strikeIndex + 1}/3 — выбери чуко-биту`;
+  }
   setObjective(text);
 }
 
@@ -1020,43 +934,6 @@ function flashObjective(text) {
     document.getElementById('objective').textContent = current;
     flashTimer = null;
   }, 1200);
-}
-
-function animateToSlot(piece, slotIndex, sourcePiece, onDone) {
-  const sprite = piece.sprite;
-  if (!sprite) return onDone?.();
-  const slotEl = document.querySelector(`.slot[data-slot-index="${slotIndex}"]`);
-  if (!slotEl) return onDone?.();
-  const slotRect = slotEl.getBoundingClientRect();
-  const hostRect = host.getBoundingClientRect();
-  const tx = slotRect.left - hostRect.left + slotRect.width / 2;
-  const ty = slotRect.top - hostRect.top + slotRect.height / 2;
-  const sx = sprite.x, sy = sprite.y, ss = sprite.scale.x, sr = sprite.rotation;
-  const targetScale = ss * 0.42;
-  const apex = Math.max(52, Math.min(96, Math.abs(ty - sy) * 0.36 + 46));
-  let f = 0;
-  const pauseFrames = 4;
-  const duration = 38;
-  app.ticker.add(tick);
-  function tick() {
-    f++;
-    if (f <= pauseFrames) {
-      sprite.rotation = sr + Math.sin((f / pauseFrames) * Math.PI) * 0.018;
-      return;
-    }
-    const t = Math.min(1, (f - pauseFrames) / duration);
-    const e = easeOutCubic(t);
-    sprite.x = sx + (tx - sx) * e;
-    sprite.y = sy + (ty - sy) * e - Math.sin(Math.PI * e) * apex;
-    sprite.rotation = sr + e * 0.9;
-    sprite.scale.set(ss + (targetScale - ss) * e);
-    sprite.alpha = 1 - e * 0.88;
-    if (t >= 1) {
-      app.ticker.remove(tick);
-      sprite.destroy();
-      onDone?.();
-    }
-  }
 }
 
 function animateScatterIn(piece) {
@@ -1498,10 +1375,6 @@ function celebrateKhan(piece) {
       burst.destroy();
     }
   }
-}
-
-function poseNameForIndex(index) {
-  return poseGroups[index] || 'Чуко';
 }
 
 function mixHex(a, b, amount = 0.5) {

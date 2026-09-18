@@ -18,7 +18,7 @@
       <div class="brand">X2<br><span>ЛОТЕРЕЯ</span></div>
       <div class="title-block">
         <div class="title">УПАЙ</div>
-        <div class="subtitle">Выбивай чуко. Собирай тройки. Лови Хана!</div>
+        <div class="subtitle">Выбивай чуко. Собери 2 УПАЙ. Выбей Хана!</div>
       </div>
 
       <div class="status-panel">
@@ -44,13 +44,6 @@
       </div>
     </header>
 
-    <section class="pose-help-panel" id="poseHelpPanel">
-      <button class="pose-help-toggle" id="poseHelpToggle" type="button" aria-label="Свернуть панель">×</button>
-      <div class="pose-help-title">Положения чуко</div>
-      <div class="pose-help-sub">Нажми название — подсветим на поле</div>
-      <div class="pose-help-buttons" id="poseHelpButtons"></div>
-    </section>
-
     <aside class="side-tools">
       <button class="tool" type="button" aria-label="Звук">◖</button>
       <button class="tool" type="button" aria-label="Музыка">♪</button>
@@ -68,7 +61,7 @@
 
       <label class="scene-row">
         <span>Размер чуко</span><b id="valChukoSize">100%</b>
-        <input type="range" id="sceneChukoSize" min="0.7" max="1.65" step="0.01" value="1.16">
+        <input type="range" id="sceneChukoSize" min="0.7" max="1.65" step="0.01" value="1.05">
       </label>
 
       <label class="scene-row">
@@ -108,16 +101,20 @@
       </div>
     </section>
 
-    <section class="upay-zones" aria-label="Поля УПАЙ">
-      <div class="zone" id="upayZone1">
-        <div class="zone-title">УПАЙ 1 <span class="zone-progress" id="zone1Progress">0/3</span></div>
-        <div class="zone-slots" id="zone1"></div>
+    <section class="strike-track" aria-label="Прогресс ударов">
+      <div class="strike-group" id="strikeStage1">
+        <div class="strike-group-title">Этап 1</div>
+        <div class="pip-row" id="pipsStage1"></div>
       </div>
-      <div class="center-ornament">✦</div>
-      <div class="zone" id="upayZone2">
-        <div class="zone-title">УПАЙ 2 <span class="zone-progress" id="zone2Progress">0/3</span></div>
-        <div class="zone-slots" id="zone2"></div>
+      <div class="strike-group" id="strikeStage2" hidden>
+        <div class="strike-group-title">Этап 2</div>
+        <div class="pip-row" id="pipsStage2"></div>
       </div>
+      <div class="strike-group strike-khan" id="strikeKhan" hidden>
+        <div class="strike-group-title">ХАН</div>
+        <div class="pip-row" id="pipsKhan"></div>
+      </div>
+      <div class="strike-multiplier" id="strikeMultiplier" hidden></div>
     </section>
 
     <section class="controls">
