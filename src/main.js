@@ -64,6 +64,12 @@ fxLayer.addChild(aimGuide);
 
 let bitaDrag = null;
 
+const khanGlowRing = new Graphics();
+khanGlowRing.visible = false;
+khanGlowRing.zIndex = 15;
+fxLayer.addChild(khanGlowRing);
+let khanGlowTick = null;
+
 setupUI();
 startNewGame();
 window.addEventListener('resize', () => scheduleSceneRebuild());
@@ -310,6 +316,7 @@ function startNewGame() {
   buildPieces();
   resetSlotDom();
   updateProgress();
+  updateRoundStatus();
   setObjectiveFromScenario();
   rebuildPieceSprites(true);
   syncSelectorLock();
@@ -559,6 +566,7 @@ function strikeTargetWithArc(source, target, launchX, launchY) {
       state.phase = 'idle';
       setObjectiveFromScenario();
     }
+    updateRoundStatus();
     syncSelectorLock();
     refreshPieceVisuals();
   };
@@ -826,7 +834,7 @@ function refreshPieceVisuals() {
     else if (aimed) displayTint = mixHex(baseTint, 0xf5ffb0, 0.16);
     else if (validTarget) displayTint = mixHex(baseTint, 0xfff3cf, 0.12);
     else if (selectableSource) displayTint = mixHex(baseTint, 0xf2fcff, 0.10);
-    p.sprite.tint = displayTint;
+    if (!(p.type === 'khan' && khanGlowTick)) p.sprite.tint = displayTint;
 
     let alpha = 0.96;
     if (source) alpha = (selected || validTarget || aimed || p.type === 'khan') ? 1 : (dragging ? 0.5 : 0.56);
@@ -840,6 +848,7 @@ function refreshPieceVisuals() {
   }
   updateSelectionRing();
   updatePrimaryButton();
+  updateKhanGlowState();
 }
 
 function addHintMarker(piece, color, alpha = 0.2, scaleBoost = 1) {
@@ -915,6 +924,46 @@ function updateProgress() {
   document.getElementById('upayZone2').classList.toggle('complete', c2 === 3);
 }
 
+function computeStrikeCount(snap) {
+  let count = 0;
+  if (snap.stage === 'stage1') return snap.strikeIndex;
+  count += 3;
+  if (snap.stage === 'stage2') return count + snap.strikeIndex;
+  count += 3;
+  if (snap.stage === 'khan') return count + (snap.finished ? 1 : 0);
+  return count;
+}
+
+// Only ever reveals a multiplier the player has actually earned the right to
+// see (a stage that has fully resolved) — never the pre-scripted final
+// outcome, which stays hidden until the round is actually over.
+function computeRevealedMultiplier(snap) {
+  const c1 = snap.stage1Total;
+  if (snap.stage === 'stage1') {
+    if (!snap.finished) return null;
+    return c1 < 2 ? 0 : 1;
+  }
+  if (snap.stage === 'stage2') {
+    if (!snap.finished) return 2;
+    const total = c1 + snap.stage2Total;
+    if (total === 3) return 2;
+    if (total === 4) return 3;
+    return 5;
+  }
+  if (snap.stage === 'khan') {
+    if (!snap.finished) return 25;
+    return snap.khanHit ? 500 : 25;
+  }
+  return snap.multiplier ?? 0;
+}
+
+function updateRoundStatus() {
+  const snap = scenario.snapshot();
+  document.getElementById('strikeCountValue').textContent = String(computeStrikeCount(snap));
+  const revealed = computeRevealedMultiplier(snap);
+  document.getElementById('winValueDisplay').textContent = revealed === null ? '—' : `×${revealed}`;
+}
+
 function setObjective(text) {
   state.lastObjective = text;
   document.getElementById('objective').textContent = text;
@@ -986,8 +1035,13 @@ function animateToSlot(piece, slotIndex, sourcePiece, onDone) {
   if (!slotEl) return onDone?.();
   const slotRect = slotEl.getBoundingClientRect();
   const hostRect = host.getBoundingClientRect();
-  const tx = slotRect.left - hostRect.left + slotRect.width / 2;
-  const ty = slotRect.top - hostRect.top + slotRect.height / 2;
+  // slotRect/hostRect are in visual CSS pixels (post CSS transform on desktop),
+  // while sprite coordinates live in PIXI's internal render resolution (which
+  // does not shrink with the shell's transform:scale). Convert into that space.
+  const scaleX = app.renderer.width / hostRect.width;
+  const scaleY = app.renderer.height / hostRect.height;
+  const tx = (slotRect.left - hostRect.left + slotRect.width / 2) * scaleX;
+  const ty = (slotRect.top - hostRect.top + slotRect.height / 2) * scaleY;
   const sx = sprite.x, sy = sprite.y, ss = sprite.scale.x, sr = sprite.rotation;
   const targetScale = ss * 0.42;
   const apex = Math.max(52, Math.min(96, Math.abs(ty - sy) * 0.36 + 46));
@@ -1421,6 +1475,44 @@ function celebrateKhan(piece) {
       app.ticker.remove(tick);
       burst.destroy();
     }
+  }
+}
+
+function updateKhanGlowState() {
+  const khan = getKhanPiece();
+  const shouldGlow = khan?.sprite && scenario.snapshot().stage === 'khan' && !scenario.snapshot().finished;
+
+  if (shouldGlow) {
+    if (!khanGlowTick) {
+      let t = 0;
+      khanGlowTick = () => {
+        t += 0.05;
+        const wave = (Math.sin(t) + 1) / 2;
+        if (!khan.sprite) return;
+        khan.sprite.tint = mixHex(0xffffff, 0xffd35c, 0.35 + wave * 0.5);
+        const w = app.renderer.width;
+        const responsive = w / 941;
+        const baseScale = khan.scaleBase * responsive * (CONFIG.scene.khanScaleMultiplier ?? 1);
+        khan.sprite.scale.set(baseScale * (1 + wave * 0.035));
+
+        khanGlowRing.visible = true;
+        khanGlowRing.clear();
+        khanGlowRing.position.set(khan.sprite.x, khan.sprite.y);
+        const rw = khan.sprite.width * (0.60 + wave * 0.12);
+        const rh = khan.sprite.height * (0.54 + wave * 0.12);
+        khanGlowRing.ellipse(0, 0, rw, rh);
+        khanGlowRing.fill({ color: 0xffd35c, alpha: 0.08 + wave * 0.14 });
+        khanGlowRing.ellipse(0, 0, rw * 1.08, rh * 1.08);
+        khanGlowRing.stroke({ color: 0xffe08a, width: 2.5, alpha: 0.35 + wave * 0.4 });
+      };
+      app.ticker.add(khanGlowTick);
+    }
+  } else if (khanGlowTick) {
+    app.ticker.remove(khanGlowTick);
+    khanGlowTick = null;
+    khanGlowRing.visible = false;
+    khanGlowRing.clear();
+    if (khan?.sprite) khan.sprite.tint = 0xffffff;
   }
 }
 

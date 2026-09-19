@@ -29,7 +29,7 @@ button{font:inherit}
 .bg-layer{inset:0;background-position:center top;background-size:cover}
 .carpet-layer{left:var(--carpet-x);top:var(--carpet-y);width:var(--carpet-w);height:var(--carpet-h);transform:translate(-50%,-50%);background-position:center center;background-size:contain;aspect-ratio:1/1;z-index:1;filter:drop-shadow(0 8px 12px rgba(0,0,0,.10))}
 .pixi-host{position:absolute;inset:0;z-index:2;pointer-events:auto}
-.topbar,.side-tools,.objective,.upay-zones,.controls,.footer{position:absolute;z-index:4}
+.topbar,.side-tools,.objective,.round-status,.upay-zones,.controls,.footer{position:absolute;z-index:4}
 
 
 .scene-settings-panel{position:absolute;right:18px;top:300px;z-index:6;width:280px;padding:14px 14px 12px;border-radius:18px;background:rgba(9,35,59,.94);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 24px rgba(0,0,0,.25);backdrop-filter:blur(4px);color:#fff}
@@ -73,6 +73,10 @@ button{font:inherit}
 .tool{width:56px;height:56px;border-radius:50%;border:2px solid rgba(234,194,105,.95);background:rgba(5,25,60,.90);color:#f5d68d;font-size:25px;font-weight:800;box-shadow:0 7px 16px rgba(0,0,0,.2)}
 
 .objective{left:50%;bottom:252px;transform:translateX(-50%);min-width:320px;max-width:76%;text-align:center;background:linear-gradient(180deg,rgba(36,81,116,.98),rgba(19,57,84,.98));border:1px solid rgba(255,255,255,.25);border-radius:21px;padding:11px 24px;font-size:21px;font-weight:850;box-shadow:0 8px 18px rgba(0,0,0,.17)}
+.round-status{left:82px;right:82px;top:1058px;display:flex;justify-content:center;align-items:center;gap:14px}
+.round-pill{background:linear-gradient(180deg,rgba(18,57,88,.97),rgba(6,27,47,.96));border:2px solid rgba(160,203,229,.42);border-radius:16px;padding:9px 22px;font-size:16px;font-weight:800;color:#dbe9f5;box-shadow:0 8px 16px rgba(0,0,0,.16)}
+.round-pill strong{color:#f3dfac;margin-left:6px;font-size:19px;font-weight:900}
+.round-pill.win-pill strong{color:#ffe58e}
 .upay-zones{left:82px;right:82px;top:1128px;display:grid;grid-template-columns:1fr 65px 1fr;align-items:center;gap:16px}
 .zone{min-width:0}
 .center-ornament{display:flex;align-items:center;justify-content:center;color:#1d557d;font-size:50px;text-shadow:0 2px 2px rgba(255,255,255,.5)}
@@ -98,6 +102,7 @@ button{font:inherit}
   .status-panel{right:12px;top:12px;width:160px;gap:6px}.pill{width:160px;min-height:57px;border-radius:20px;padding:7px 11px}.pill>span:first-child{font-size:12px}.pill strong{font-size:16px}.stake-arrow{right:11px;top:19px}.stake-menu{top:61px;right:6px;width:150px}.stake-option{height:42px;font-size:15px}.minor-status-row{gap:5px}.minor-pill{min-height:34px;font-size:11px}.minor-pill strong{font-size:11px}.toggle{width:30px;height:18px}.toggle::after{width:12px;height:12px}.toggle-pill input:checked+.toggle::after{transform:translateX(12px)}
   .side-tools{top:230px;left:10px;gap:10px}.tool{width:40px;height:40px;font-size:18px}.scene-settings-panel{right:10px;top:186px;width:188px;padding:10px 10px 9px;border-radius:14px}.scene-settings-head{font-size:11px;margin-bottom:4px}.scene-settings-close{width:22px;height:22px;font-size:14px}.scene-row{margin-top:8px}.scene-row>span,.scene-row>b{font-size:10px}.scene-actions{grid-template-columns:1fr;gap:6px}.scene-actions button{height:32px;font-size:10px}
   .objective{bottom:124px;min-width:230px;padding:8px 18px;font-size:15px;max-width:82%}
+  .round-status{left:18px;right:18px;top:64.5%;gap:8px}.round-pill{padding:6px 14px;font-size:12px;border-radius:12px}.round-pill strong{font-size:14px;margin-left:4px}
   .upay-zones{left:18px;right:18px;top:69.8%;grid-template-columns:1fr 34px 1fr;gap:6px}.zone-title{font-size:15px}.zone-progress{font-size:10px}.center-ornament{font-size:30px}.zone-slots{height:79px;padding:10px 8px;gap:5px;border-radius:14px}.slot{height:57px;border-width:2px;border-radius:10px}
   .controls{left:10px;right:10px;bottom:42px}.action-row{grid-template-columns:78px 1fr 78px;gap:4px;padding:10px 9px;border-radius:26px}.icon-btn{height:76px}.icon-btn b{font-size:28px}.icon-btn span{font-size:11px}.main-btn{height:74px;border-radius:24px;font-size:27px}.main-btn small{margin-top:5px;font-size:14px}.footer{bottom:10px;font-size:10px}
 }
@@ -113,6 +118,7 @@ button{font:inherit}
   .side-tools{top:110px;left:6px;gap:6px}.tool{width:30px;height:30px;font-size:13px}
   .scene-settings-panel{right:6px;top:94px;width:160px;padding:8px 8px 7px}
   .objective{bottom:19%;min-width:0;width:82%;padding:6px 12px;font-size:12px}
+  .round-status{top:55.5%;gap:6px}.round-pill{padding:4px 10px;font-size:10px;border-radius:9px}.round-pill strong{font-size:11px;margin-left:3px}
   .upay-zones{top:61%;gap:6px}.zone-title{font-size:12px;margin-bottom:4px}.zone-progress{font-size:9px}.center-ornament{font-size:22px}.zone-slots{height:58px;padding:6px 5px;gap:4px;border-radius:11px}.slot{height:40px;border-width:1.5px;border-radius:7px}
   .controls{bottom:20px}
 }
