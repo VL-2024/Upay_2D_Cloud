@@ -778,6 +778,11 @@ const TYPE_VARS = [
   { id: 'typeControlsHeight', label: 'valControlsHeight', varName: '--v-controls-height' },
   { id: 'typeBottomFont', label: 'valBottomFont', varName: '--v-bottom-font' },
   { id: 'typeBottomHeight', label: 'valBottomHeight', varName: '--v-bottom-height' },
+  { id: 'typeHintShift', label: 'valHintShift', varName: '--v-hint-shift' },
+  { id: 'typeInfoPanelShift', label: 'valInfoPanelShift', varName: '--v-info-panel-shift' },
+  { id: 'typeUpayZonesShift', label: 'valUpayZonesShift', varName: '--v-upay-zones-shift' },
+  { id: 'typeControlsShift', label: 'valControlsShift', varName: '--v-controls-shift' },
+  { id: 'typeBottomShift', label: 'valBottomShift', varName: '--v-bottom-shift' },
 ];
 
 function setupTypeSettingsUI() {

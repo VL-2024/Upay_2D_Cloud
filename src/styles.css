@@ -8,14 +8,24 @@
   --white:#f8fbff;
 
   /* Tunable via the temporary "Aa" size panel (setupTypeSettingsUI in
-     main.js) — final values get baked in here once picked, panel removed. */
-  --v-wallet-font:16px;
-  --v-info-label:13px;
-  --v-info-value:24px;
-  --v-controls-font:18px;
-  --v-controls-height:52px;
-  --v-bottom-font:14px;
-  --v-bottom-height:40px;
+     main.js) — final values get baked in here once picked, panel removed.
+     One universal set (no mobile override) since it's being hand-tuned on
+     an actual phone. */
+  --v-wallet-font:32px;
+  --v-info-label:24px;
+  --v-info-value:44px;
+  --v-controls-font:32px;
+  --v-controls-height:90px;
+  --v-bottom-font:24px;
+  --v-bottom-height:60px;
+
+  /* Panel vertical-position offsets, added on top of each row's base
+     top/bottom % via calc() — 0px = unchanged. */
+  --v-info-panel-shift:0px;
+  --v-upay-zones-shift:0px;
+  --v-hint-shift:0px;
+  --v-controls-shift:0px;
+  --v-bottom-shift:0px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:#04182a;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--white)}
@@ -82,20 +92,20 @@ button{font:inherit}
 .tool{width:32px;height:32px;border-radius:50%;border:2px solid rgba(234,194,105,.95);background:rgba(5,25,60,.90);color:#f5d68d;font-size:15px;font-weight:800;box-shadow:0 5px 12px rgba(0,0,0,.2)}
 
 /* ---------- Hint (dismissible, replaces the old always-on objective) ---------- */
-.hint{left:8%;right:8%;top:76.5%;display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .2s ease}
+.hint{left:8%;right:8%;top:calc(76.5% + var(--v-hint-shift));display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .2s ease}
 .hint-text{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;background:linear-gradient(180deg,rgba(36,81,116,.98),rgba(19,57,84,.98));border:1px solid rgba(255,255,255,.25);border-radius:18px;padding:9px 20px;font-size:16px;font-weight:850;box-shadow:0 8px 18px rgba(0,0,0,.17)}
 .hint.collapsed .hint-text{display:none}
 .hint-toggle{flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1px solid rgba(219,230,60,.55);background:rgba(3,23,54,.82);color:#dbe63c;font-size:14px;font-weight:900;line-height:1;display:grid;place-items:center;cursor:pointer}
 
 /* ---------- Info-panel: 4 tiles (УПАЙ1 / УПАЙ2 / ХАН / ВЫИГРЫШ) ---------- */
-.info-panel{left:6%;right:6%;top:63.3%;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.info-panel{left:6%;right:6%;top:calc(63.3% + var(--v-info-panel-shift));display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .info-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;border:1px solid rgba(160,203,229,.34);background:linear-gradient(180deg,rgba(18,57,88,.97),rgba(6,27,47,.96));border-radius:16px;box-shadow:0 8px 16px rgba(0,0,0,.16)}
 .info-label{font-size:var(--v-info-label);font-weight:800;color:#b8c6db;letter-spacing:.02em;white-space:nowrap}
 .info-value{font-size:var(--v-info-value);font-weight:950;margin-top:3px;line-height:1;white-space:nowrap}
 .info-value.accent{color:#dbe63c}
 .info-value.gold{color:#ffd45d}
 
-.upay-zones{left:10%;right:10%;top:68.8%;display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:10px}
+.upay-zones{left:10%;right:10%;top:calc(68.8% + var(--v-upay-zones-shift));display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:10px}
 .zone{min-width:0}
 .center-ornament{display:flex;align-items:center;justify-content:center;color:#1d557d;font-size:32px;text-shadow:0 2px 2px rgba(255,255,255,.5)}
 .zone-slots{height:82px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:11px 10px;background:linear-gradient(180deg,rgba(18,57,88,.97),rgba(6,27,47,.96));border-radius:18px;border:2px solid rgba(160,203,229,.42);box-shadow:0 11px 22px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.10)}
@@ -104,7 +114,7 @@ button{font:inherit}
 .slot img{width:95%;height:95%;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(0,0,0,.18))}
 
 /* ---------- Controls: stake / main action / autoplay ---------- */
-.controls{left:5%;right:5%;top:83.8%;height:var(--v-controls-height)}
+.controls{left:5%;right:5%;top:calc(83.8% + var(--v-controls-shift));height:var(--v-controls-height)}
 .action-row{display:flex;align-items:stretch;gap:8px;height:100%}
 .stake-select{position:relative;flex:0 0 23%;min-width:64px;padding:0 2px;border-radius:20px;border:1px solid rgba(117,163,211,.46);background:linear-gradient(180deg,rgba(35,75,154,.98),rgba(17,46,112,.98));color:#dbe63c;font-size:var(--v-controls-font);font-weight:950;white-space:nowrap;cursor:pointer}
 .stake-select.locked{cursor:default}
@@ -129,7 +139,7 @@ button{font:inherit}
 .autoplay-count:hover,.autoplay-count:focus-visible{border-color:rgba(219,230,60,.65);color:#dbe63c}
 
 /* ---------- Bottom bar ---------- */
-.bottom-tools{left:3%;right:3%;bottom:1.4%;height:var(--v-bottom-height);display:flex;align-items:center;gap:8px}
+.bottom-tools{left:3%;right:3%;bottom:calc(1.4% + var(--v-bottom-shift));height:var(--v-bottom-height);display:flex;align-items:center;gap:8px}
 .mode-switch{flex:0 0 auto;display:flex;border:1px solid rgba(117,163,211,.34);border-radius:12px;overflow:hidden;background:rgba(3,23,54,.90);box-shadow:0 4px 10px rgba(0,0,0,.14)}
 .mode-switch.disabled{opacity:.4;pointer-events:none}
 .mode-switch button{border:0;min-width:52px;height:100%;padding:0 10px;background:transparent;color:#8196b2;font-weight:900;font-size:var(--v-bottom-font)}
@@ -175,15 +185,6 @@ button{font:inherit}
 .tickets-empty{padding:18px 8px;text-align:center;color:#9dafc5;font-size:14px}
 
 @media(max-width:700px){
-  :root{
-    --v-wallet-font:14px;
-    --v-info-label:10px;
-    --v-info-value:18px;
-    --v-controls-font:15px;
-    --v-controls-height:44px;
-    --v-bottom-font:11px;
-    --v-bottom-height:34px;
-  }
   .brand{font-size:24px}.brand span{font-size:9px}
   .title{font-size:clamp(22px,7vw,36px)}.subtitle{font-size:clamp(9px,2.2vw,12px)}
   .wallet{padding:5px 9px;gap:6px;border-radius:16px}.small-label{font-size:9px}.deposit{width:26px;height:26px;font-size:19px}
