@@ -16,21 +16,22 @@
      real (narrower) width instead, so the SAME px numbers are
      proportionally too big there — see the @media(max-width:700px)
      override below for the separate phone-tuned set. */
-  --v-wallet-font:54px;
-  --v-info-label:23px;
-  --v-info-value:58px;
+  --v-wallet-font:53px;
+  --v-info-label:26px;
+  --v-info-value:43px;
   --v-controls-font:38px;
-  --v-controls-height:94px;
-  --v-bottom-font:39px;
-  --v-bottom-height:64px;
+  --v-controls-height:101px;
+  --v-bottom-font:40px;
+  --v-bottom-height:56px;
+  --v-hint-font:22px;
 
   /* Panel vertical-position offsets, added on top of each row's base
      top/bottom % via calc() — 0px = unchanged. */
-  --v-info-panel-shift:80px;
-  --v-upay-zones-shift:80px;
-  --v-hint-shift:80px;
-  --v-controls-shift:64px;
-  --v-bottom-shift:2px;
+  --v-info-panel-shift:103px;
+  --v-upay-zones-shift:138px;
+  --v-hint-shift:113px;
+  --v-controls-shift:60px;
+  --v-bottom-shift:0px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:#04182a;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--white)}
@@ -98,7 +99,7 @@ button{font:inherit}
 
 /* ---------- Hint (dismissible, replaces the old always-on objective) ---------- */
 .hint{left:8%;right:8%;top:calc(76.5% + var(--v-hint-shift));display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .2s ease}
-.hint-text{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;background:linear-gradient(180deg,rgba(36,81,116,.98),rgba(19,57,84,.98));border:1px solid rgba(255,255,255,.25);border-radius:18px;padding:9px 20px;font-size:16px;font-weight:850;box-shadow:0 8px 18px rgba(0,0,0,.17)}
+.hint-text{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;background:linear-gradient(180deg,rgba(36,81,116,.98),rgba(19,57,84,.98));border:1px solid rgba(255,255,255,.25);border-radius:18px;padding:9px 20px;font-size:var(--v-hint-font);font-weight:850;box-shadow:0 8px 18px rgba(0,0,0,.17)}
 .hint.collapsed .hint-text{display:none}
 .hint-toggle{flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1px solid rgba(219,230,60,.55);background:rgba(3,23,54,.82);color:#dbe63c;font-size:14px;font-weight:900;line-height:1;display:grid;place-items:center;cursor:pointer}
 
@@ -197,16 +198,17 @@ button{font:inherit}
      reasonable first guess — tune live on an actual phone via the "Aa"
      panel and send the final numbers back. */
   :root{
-    --v-wallet-font:23px;
-    --v-info-label:10px;
-    --v-info-value:25px;
-    --v-controls-font:16px;
-    --v-controls-height:40px;
-    --v-bottom-font:17px;
+    --v-wallet-font:20px;
+    --v-info-label:11px;
+    --v-info-value:27px;
+    --v-controls-font:17px;
+    --v-controls-height:49px;
+    --v-bottom-font:15px;
     --v-bottom-height:27px;
-    --v-hint-shift:34px;
-    --v-info-panel-shift:34px;
-    --v-upay-zones-shift:34px;
+    --v-hint-font:13px;
+    --v-hint-shift:48px;
+    --v-info-panel-shift:25px;
+    --v-upay-zones-shift:46px;
     --v-controls-shift:27px;
     --v-bottom-shift:1px;
   }
@@ -215,7 +217,7 @@ button{font:inherit}
   .wallet{padding:5px 9px;gap:6px;border-radius:16px}.small-label{font-size:9px}.deposit{width:26px;height:26px;font-size:19px}
   .lang-current{min-width:50px;height:24px;font-size:10px;padding:0 7px;border-radius:9px}.lang-menu{top:28px;width:78px}.lang-option{height:28px;font-size:11px}
   .side-tools{left:1.5%}.tool{width:24px;height:24px;font-size:11px}
-  .hint-text{padding:6px 14px;font-size:11px;border-radius:13px}.hint-toggle{width:20px;height:20px;font-size:11px}
+  .hint-text{padding:6px 14px;border-radius:13px}.hint-toggle{width:20px;height:20px;font-size:11px}
   .info-panel{gap:5px}.info-cell{padding:5px 2px;border-radius:11px}
   .upay-zones{gap:5px}.zone-slots{height:52px;padding:6px 5px;gap:4px;border-radius:12px}.slot{border-width:1.5px;border-radius:8px}.center-ornament{font-size:20px}
   .stake-select{border-radius:18px}.main-btn{border-radius:20px}.autoplay-btn{border-radius:16px}

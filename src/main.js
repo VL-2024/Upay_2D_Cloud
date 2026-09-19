@@ -778,6 +778,7 @@ const TYPE_VARS = [
   { id: 'typeControlsHeight', label: 'valControlsHeight', varName: '--v-controls-height' },
   { id: 'typeBottomFont', label: 'valBottomFont', varName: '--v-bottom-font' },
   { id: 'typeBottomHeight', label: 'valBottomHeight', varName: '--v-bottom-height' },
+  { id: 'typeHintFont', label: 'valHintFont', varName: '--v-hint-font' },
   { id: 'typeHintShift', label: 'valHintShift', varName: '--v-hint-shift' },
   { id: 'typeInfoPanelShift', label: 'valInfoPanelShift', varName: '--v-info-panel-shift' },
   { id: 'typeUpayZonesShift', label: 'valUpayZonesShift', varName: '--v-upay-zones-shift' },
