@@ -1,6 +1,6 @@
-import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs';
-import { CONFIG } from './config.js';
-import { ScenarioEngine, SCENARIOS } from './scenario-engine.js';
+import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs?v=0.1.40';
+import { CONFIG } from './config.js?v=0.1.40';
+import { ScenarioEngine, SCENARIOS } from './scenario-engine.js?v=0.1.40';
 
 const chukoFiles = [
   './assets/chuko/chuko_aykur.webp',

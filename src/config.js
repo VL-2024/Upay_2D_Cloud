@@ -1,5 +1,5 @@
 export const CONFIG = {
-  version: '0.1.39-alpha',
+  version: '0.1.40-alpha',
   currency: 'сом',
   denominations: [25, 50, 100],
   defaultDenomination: 50,
@@ -15,10 +15,10 @@ export const CONFIG = {
     pileSpreadX: [0.12, 0.205, 0.285],
     pileSpreadY: [0.058, 0.096, 0.135],
     edgeOutset: 0.038,
-    chukoScaleMultiplier: 1.05,
+    chukoScaleMultiplier: 1.33,
     khanScaleMultiplier: 1,
-    pileSpreadScale: 0.67,
-    pileSpreadHeightScale: 0.97,
+    pileSpreadScale: 0.79,
+    pileSpreadHeightScale: 0.94,
   },
   pieces: {
     normalCount: 15,
