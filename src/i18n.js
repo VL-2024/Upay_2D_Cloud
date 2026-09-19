@@ -58,6 +58,10 @@ const TABLE = [
   { key: 'insufficientFunds', RU: 'Недостаточно средств', EN: 'Insufficient balance', KG: 'Каражат жетишсиз', ZH: '余额不足' },
   { key: 'noValidPair', RU: 'Нет пары в таком же положении — выбери другой чуко', EN: 'No matching pair — choose another chuko', KG: 'Дал келген жуп жок — башка чукону тандаңыз', ZH: '没有匹配的一对——请选择其他 chuko' },
   { key: 'dragSelected', RU: 'Оттяни выбранную фишку и прицелься', EN: 'Drag the selected piece to aim', KG: 'Тандалган бөлүкчөнү тартып, кыраатаңыз', ZH: '拖动已选中的棋子进行瞄准' },
+
+  { key: 'sessionEnded', RU: 'Сессия завершена, обновите страницу', EN: 'Session ended, please reload', KG: 'Сессия аяктады, баракты жаңыртыңыз', ZH: '会话已结束，请刷新页面' },
+  { key: 'lmsStartError', RU: 'Не удалось начать игру, попробуйте ещё раз', EN: 'Could not start the game, try again', KG: 'Оюн башталган жок, кайра аракет кылыңыз', ZH: '无法开始游戏，请重试' },
+  { key: 'lmsBootError', RU: 'Не удалось загрузить данные LMS', EN: 'Failed to load LMS data', KG: 'LMS маалыматтары жүктөлгөн жок', ZH: '加载 LMS 数据失败' },
 ];
 
 function buildDict(lang) {

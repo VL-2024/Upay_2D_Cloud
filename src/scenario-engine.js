@@ -23,6 +23,42 @@ const RULES = Object.freeze({
   [SCENARIOS.FIVEHUNDRED]: { stage1Hits: 3, stage2Hits: 3, khanHit: true, multiplier: 500, result: 'ХАН ВЫБИТ! Главный выигрыш ×500' },
 });
 
+// LMS PayTicket returns a numeric `scenario` id (see
+// docs/PayTicket-API-spec-for-backend.md) — this table is the single
+// source of truth mapping it onto our internal SCENARIOS codes, mirroring
+// the role src/scenario-config.js plays in the sibling Khan1_2D_Cloud game.
+const LMS_SCENARIO_IDS = Object.freeze({
+  1: SCENARIOS.ZERO_0,
+  2: SCENARIOS.ZERO_1,
+  3: SCENARIOS.ONE,
+  4: SCENARIOS.TWO,
+  5: SCENARIOS.THREE,
+  6: SCENARIOS.FIVE,
+  7: SCENARIOS.TEN,
+  8: SCENARIOS.FIVEHUNDRED,
+});
+const SCENARIO_TO_LMS_ID = Object.freeze(
+  Object.fromEntries(Object.entries(LMS_SCENARIO_IDS).map(([id, code]) => [code, Number(id)]))
+);
+
+export function scenarioForLmsId(id) {
+  return LMS_SCENARIO_IDS[Number(id)] || null;
+}
+
+export function lmsIdForScenario(code) {
+  return SCENARIO_TO_LMS_ID[code] ?? null;
+}
+
+export function isValidLmsScenarioId(id) {
+  return Object.prototype.hasOwnProperty.call(LMS_SCENARIO_IDS, Number(id));
+}
+
+export function multiplierForScenario(code) {
+  return RULES[code]?.multiplier ?? 0;
+}
+
+export const LMS_SCENARIO_ORDER = Object.freeze(Object.keys(LMS_SCENARIO_IDS).map(Number));
+
 // Derives the payout table straight from RULES so the "Таблица выплат"
 // modal can never drift out of sync with the actual scenario values.
 export function getPayoutTable() {

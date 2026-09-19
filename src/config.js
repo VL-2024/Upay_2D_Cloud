@@ -1,5 +1,5 @@
 export const CONFIG = {
-  version: '0.2.0-alpha',
+  version: '0.3.0-alpha',
   currency: 'сом',
   denominations: [25, 50, 100],
   defaultDenomination: 50,
@@ -45,5 +45,33 @@ export const CONFIG = {
     rotationPerPull: 0.0026,
     aimedColor: 0xdbe63c,
     unaimedGuideColor: 0x8fb3d6,
+  },
+
+  // LMS integration (same "X2" postMessage/PayTicket contract as the
+  // sibling Khan1_2D_Cloud game — see docs/LMS-Integration-spec.md and
+  // docs/PayTicket-API-spec-for-backend.md). mock:true keeps the game fully
+  // playable standalone; flip to false (or pass ?mock=false) once the real
+  // LMS endpoint/gameId below are confirmed.
+  lms: {
+    gameId: 'UPAY',
+    currencyCode: 'KGS', // ISO code sent to PayTicket; distinct from CONFIG.currency (UI display label)
+    mock: true,
+    apiBase: '',
+    endpoints: {
+      // TODO: no confirmed dev/prod endpoint for UPAY yet — placeholder
+      // mirrors Khan1's dev URL shape so payTicketMethod/GET wiring can be
+      // tested; replace before any real (non-mock) embed.
+      lms: 'https://dev.superloto.kg/api/Lotto.Users.cls',
+    },
+    payTicketMethod: 'GET',
+    initMode: 'postMessage',
+    sessionMode: 'postMessage',
+    sessionQueryParam: 'session',
+    sessionHeader: 'X-Session-ID',
+    // SECURITY: must be a concrete list of LMS domains before real embed —
+    // '*' only for local/mock testing. See isAllowedOrigin() in lms-adapter.js.
+    parentOrigin: '*',
+    allowedParentOrigins: [],
+    requestTimeoutMs: 10000,
   },
 };

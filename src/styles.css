@@ -121,6 +121,7 @@ button{font:inherit}
 /* ---------- Bottom bar ---------- */
 .bottom-tools{left:3%;right:3%;bottom:1.4%;height:5%;display:flex;align-items:center;gap:8px}
 .mode-switch{flex:0 0 auto;display:flex;border:1px solid rgba(117,163,211,.34);border-radius:12px;overflow:hidden;background:rgba(3,23,54,.90);box-shadow:0 4px 10px rgba(0,0,0,.14)}
+.mode-switch.disabled{opacity:.4;pointer-events:none}
 .mode-switch button{border:0;min-width:52px;height:100%;padding:0 10px;background:transparent;color:#8196b2;font-weight:900;font-size:12px}
 .mode-switch button.active{background:#24499e;color:#dbe63c}
 

@@ -1,8 +1,9 @@
-import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs?v=0.2.0';
-import { CONFIG } from './config.js?v=0.2.0';
-import { ScenarioEngine, SCENARIOS, getPayoutTable } from './scenario-engine.js?v=0.2.0';
-import { LANGS, I18N } from './i18n.js?v=0.2.0';
-import { getRulesSteps } from './rules-content.js?v=0.2.0';
+import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs?v=0.3.0';
+import { CONFIG } from './config.js?v=0.3.0';
+import { ScenarioEngine, SCENARIOS, getPayoutTable, lmsIdForScenario, multiplierForScenario } from './scenario-engine.js?v=0.3.0';
+import { LANGS, I18N } from './i18n.js?v=0.3.0';
+import { getRulesSteps } from './rules-content.js?v=0.3.0';
+import { LMS } from './lms-adapter.js?v=0.3.0';
 
 const chukoFiles = [
   './assets/chuko/chuko_aykur.webp',
@@ -54,7 +55,8 @@ function loadBool(key, fallback) {
 const state = {
   denomination: CONFIG.defaultDenomination,
   denominations: [...CONFIG.denominations],
-  currency: CONFIG.currency,
+  currency: CONFIG.currency, // display label shown in UI, e.g. "сом"
+  currencyCode: CONFIG.lms?.currencyCode || 'KGS', // ISO code sent to the LMS API
   phase: 'idle',
   pieces: [],
   selectedSourceId: null,
@@ -69,6 +71,11 @@ const state = {
   musicEnabled: loadBool(LS_KEYS.music, true),
   hintCollapsed: false,
   ticketId: null,
+  gameId: CONFIG.lms?.gameId || 'UPAY',
+  demoAllowed: true,
+  lmsScenarioId: null,
+  pendingWin: null,
+  pendingBalance: null,
   autoPlay: { active: false, remaining: 0, stopRequested: false },
 };
 
@@ -111,9 +118,27 @@ khanGlowRing.zIndex = 15;
 fxLayer.addChild(khanGlowRing);
 let khanGlowTick = null;
 
-setupUI();
-startNewGame();
+boot();
 window.addEventListener('resize', () => scheduleSceneRebuild());
+
+async function boot() {
+  let settings = {};
+  try {
+    settings = await LMS.getGameSettings();
+  } catch (err) {
+    console.error('[UPAY2D] LMS getGameSettings failed', err);
+    LMS.emit('X2_GAME_ERROR', { stage: 'init', code: err.code || 'INIT_ERROR', message: err.message || String(err) });
+  }
+  applyLmsSettings(settings);
+  setupUI();
+  // No auto-purchased round on load: a ticket is only bought once the
+  // player presses "Новая игра" / Автоигра (see beginRound()) — this
+  // matters once PayTicket is a real, money-moving LMS call.
+  LMS.emit('X2_GAME_BALANCE_LOADED', {
+    gameId: state.gameId, balance: state.balances[state.mode], currency: state.currencyCode,
+    currencyDisplay: state.currency, language: state.lang, denominations: state.denominations, mode: state.mode,
+  });
+}
 
 let pendingRebuildTimer = null;
 function scheduleSceneRebuild() {
@@ -222,14 +247,49 @@ function updateBalanceUI() {
   if (el) el.textContent = `${formatMoney(state.balances[state.mode])} ${state.currency}`;
 }
 
+// ---------- LMS settings ----------
+// Applies X2_LMS_INIT (or its mock/query-param equivalent from
+// lms-adapter.getGameSettings()) onto local state. Only overwrites a field
+// when the settings actually supply it — see docs/LMS-Integration-spec.md.
+function applyLmsSettings(settings = {}) {
+  if (settings.gameId) state.gameId = String(settings.gameId);
+
+  const requestedLang = String(settings.language || state.lang || 'RU').toUpperCase();
+  state.lang = LANGS.includes(requestedLang) ? requestedLang : 'RU';
+  localStorage.setItem(LS_KEYS.lang, state.lang);
+
+  state.currency = settings.currencyDisplay || CONFIG.currency;
+  if (settings.currency) state.currencyCode = String(settings.currency).toUpperCase();
+
+  if (Array.isArray(settings.denominations) && settings.denominations.length) {
+    state.denominations = settings.denominations.map(Number).filter(n => Number.isFinite(n) && n > 0);
+  }
+  const preferredDenom = Number(settings.denomination ?? state.denomination);
+  state.denomination = state.denominations.includes(preferredDenom) ? preferredDenom : state.denominations[0];
+
+  state.demoAllowed = settings.demoAllowed !== undefined ? Boolean(settings.demoAllowed) : true;
+  if (Number.isFinite(Number(settings.demoBalance))) state.balances.demo = Number(settings.demoBalance);
+  // Real balance: contract has no "get balance" endpoint — only
+  // X2_LMS_INIT.balance at boot and PayTicket's own `balance` afterwards.
+  if (Number.isFinite(Number(settings.balance))) state.balances.real = Number(settings.balance);
+
+  const requestedMode = String(settings.mode || state.mode || 'demo').toLowerCase() === 'real' ? 'real' : 'demo';
+  state.mode = state.demoAllowed ? requestedMode : 'real';
+  localStorage.setItem(LS_KEYS.mode, state.mode);
+
+  saveBalances();
+}
+
 // ---------- mode (real/demo) ----------
 function applyModeUI() {
   document.querySelectorAll('#modeSwitch button[data-mode]').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === state.mode);
   });
+  document.getElementById('modeSwitch').classList.toggle('disabled', !state.demoAllowed);
 }
 
 function switchMode(mode) {
+  if (!state.demoAllowed) return;
   if ((mode !== 'real' && mode !== 'demo') || mode === state.mode) return;
   if (state.phase === 'animating') return;
   if (bitaDrag) cancelBitaDrag();
@@ -239,14 +299,14 @@ function switchMode(mode) {
   applyModeUI();
   updateBalanceUI();
   updateTicketNumberUI();
+  LMS.emit('X2_GAME_MODE_CHANGED', { gameId: state.gameId, mode: state.mode, currency: state.currencyCode, language: state.lang, denomination: state.denomination });
+  LMS.emit('X2_GAME_BALANCE_LOADED', {
+    gameId: state.gameId, balance: state.balances[state.mode], currency: state.currencyCode,
+    currencyDisplay: state.currency, language: state.lang, denominations: state.denominations, mode: state.mode,
+  });
 }
 
 // ---------- tickets ----------
-function generateTicketId() {
-  const ts = Date.now();
-  return state.mode === 'demo' ? `DEMO-${ts}` : `TCK-${ts}`;
-}
-
 function updateTicketNumberUI() {
   const el = document.getElementById('ticketNumber');
   if (el) el.textContent = `№ ${state.ticketId || '—'}`;
@@ -363,6 +423,7 @@ function setupModals() {
     closeInfoMenu();
     renderHelpSteps();
     openModal('helpModal');
+    LMS.emit('X2_GAME_HELP_REQUEST', { gameId: state.gameId, language: state.lang, mode: state.mode });
   });
   document.getElementById('infoTicketsBtn').addEventListener('click', () => {
     closeInfoMenu();
@@ -435,17 +496,18 @@ function endAutoplay() {
   updatePrimaryButton();
 }
 
-function runAutoplayRound() {
+async function runAutoplayRound() {
   if (!state.autoPlay.active) return;
   if (state.autoPlay.stopRequested || state.autoPlay.remaining <= 0) {
     endAutoplay();
     return;
   }
-  if (state.phase === 'animating') {
+  if (state.phase === 'animating' || state.phase === 'requesting') {
     setTimeout(runAutoplayRound, 150);
     return;
   }
-  const started = beginRound();
+  const started = await beginRound();
+  if (!state.autoPlay.active) return; // stopped while the ticket request was in flight
   if (!started) {
     endAutoplay();
     return;
@@ -507,6 +569,7 @@ function setupUI() {
   renderAutoplayCounts();
   updateAutoBtnLabel();
   setupModals();
+  renderHint();
 
   document.getElementById('stakeSelect').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -542,7 +605,9 @@ function setupUI() {
   });
 
   document.getElementById('depositBtn').addEventListener('click', () => {
-    flashHint(tr('depositSoon'), 2600);
+    LMS.emit('X2_GAME_DEPOSIT_REQUEST', { gameId: state.gameId, mode: state.mode, currency: state.currencyCode, denomination: state.denomination, language: state.lang, balance: state.balances[state.mode] });
+    // Standalone/mock: no LMS parent to open a top-up form, so tell the player directly.
+    if (window.parent === window) flashHint(tr('depositSoon'), 2600);
   });
 
   document.getElementById('modeSwitch').addEventListener('click', (e) => {
@@ -686,8 +751,9 @@ function updatePrimaryButton() {
   if (!btn) return;
   const snap = scenario.snapshot();
   const roundActive = state.pieces.length > 0 && !snap.finished;
+  const busy = state.phase === 'animating' || state.phase === 'requesting';
   let label;
-  if (state.phase === 'animating') {
+  if (busy) {
     label = `${tr('makeThrow')}…`;
   } else if (roundActive) {
     const stageTotal = snap.stage === 'khan' ? 1 : 3;
@@ -697,8 +763,8 @@ function updatePrimaryButton() {
     label = tr('newGame');
   }
   btn.textContent = label;
-  btn.classList.toggle('is-active-turn', roundActive || state.phase === 'animating');
-  btn.classList.toggle('is-busy', state.phase === 'animating');
+  btn.classList.toggle('is-active-turn', roundActive || busy);
+  btn.classList.toggle('is-busy', busy);
 }
 
 function selectorInteractive() {
@@ -711,6 +777,7 @@ function selectDenomination(value) {
   state.denomination = n;
   syncStakeUI();
   closeStakeMenu();
+  LMS.emit('X2_GAME_DENOMINATION_CHANGED', { gameId: state.gameId, denomination: state.denomination, currency: state.currencyCode, language: state.lang, mode: state.mode });
 }
 
 function renderStakeMenu() {
@@ -739,40 +806,95 @@ function closeStakeMenu() {
   document.getElementById('stakeSelect').setAttribute('aria-expanded', 'false');
 }
 
-function beginRound() {
-  // Demo balance auto-refills so the demo mode is never actually blocked;
-  // real balance stays a local placeholder pool until LMS wiring lands.
-  if (state.mode === 'demo' && state.balances.demo < state.denomination) {
-    state.balances.demo = DEFAULT_DEMO_BALANCE;
+function lmsErrorMessage(code) {
+  if (code === 'INSUFFICIENT_FUNDS') return tr('insufficientFunds');
+  if (code === 'SESSION_EXPIRED' || code === 'SESSION_MISSING' || code === 'SESSION_TIMEOUT') return tr('sessionEnded');
+  return tr('lmsStartError');
+}
+
+// The game never picks its own outcome: PayTicket's `scenario` (mapped to
+// our SCENARIOS code) and `win`/`balance` are authoritative. The only local
+// exception is window.UPAY2D.setScenario() — a QA/dev hook that bypasses
+// the network call entirely for deterministic testing.
+async function fetchTicket(preRoundBalance) {
+  if (state.externalScenarioCode) {
+    await new Promise(r => setTimeout(r, 40));
+    const multiplier = multiplierForScenario(state.externalScenarioCode);
+    const win = state.denomination * multiplier;
+    return {
+      ticketId: `DBG-${Date.now()}`,
+      lmsScenario: lmsIdForScenario(state.externalScenarioCode),
+      scenarioCode: state.externalScenarioCode,
+      win,
+      balance: preRoundBalance - state.denomination + win,
+    };
   }
-  const bal = state.balances[state.mode];
-  if (bal < state.denomination) {
+  return state.mode === 'demo'
+    // demoBalance is the PRE-stake balance — createDemoTicket() itself
+    // subtracts the stake and adds the win, so passing the already
+    // client-side-decremented state.balances.demo here would double-count
+    // the stake.
+    ? LMS.createDemoTicket({ gameId: state.gameId, denomination: state.denomination, currency: state.currencyCode, currencyDisplay: state.currency, language: state.lang, demoBalance: preRoundBalance })
+    : LMS.createTicket({ gameId: state.gameId, denomination: state.denomination, currency: state.currencyCode, language: state.lang });
+}
+
+async function beginRound() {
+  if (state.phase === 'animating' || state.phase === 'requesting') return false;
+  if (bitaDrag) cancelBitaDrag();
+  closeAllMenus();
+
+  // Optimistic stake deduction on the display so the click feels immediate;
+  // rolled back below if PayTicket fails (mirrors the sibling Khan1 game).
+  const preRoundBalance = state.balances[state.mode];
+  if (preRoundBalance < state.denomination) {
     flashHint(tr('insufficientFunds'));
     return false;
   }
-  state.balances[state.mode] = bal - state.denomination;
-  saveBalances();
+  state.balances[state.mode] = preRoundBalance - state.denomination;
+  // 'requesting' locks the stake/mode selectors and busies the main button
+  // while PayTicket is in flight, so a second click can't buy two tickets.
+  state.phase = 'requesting';
   updateBalanceUI();
+  updatePrimaryButton();
+  syncSelectorLock();
 
-  state.ticketId = generateTicketId();
+  let data;
+  try {
+    data = await fetchTicket(preRoundBalance);
+  } catch (err) {
+    state.balances[state.mode] = preRoundBalance;
+    state.phase = 'idle';
+    updateBalanceUI();
+    updatePrimaryButton();
+    syncSelectorLock();
+    const code = err.code || 'GAME_START_ERROR';
+    flashHint(lmsErrorMessage(code));
+    LMS.emit('X2_GAME_ERROR', { stage: 'newGame', code, message: err.message || String(err) });
+    return false;
+  }
+
+  if (!data.scenarioCode) {
+    state.balances[state.mode] = preRoundBalance;
+    state.phase = 'idle';
+    updateBalanceUI();
+    updatePrimaryButton();
+    syncSelectorLock();
+    flashHint(tr('lmsStartError'));
+    LMS.emit('X2_GAME_ERROR', { stage: 'newGame', code: 'LMS_BAD_RESPONSE', message: `Unknown scenario id: ${data.lmsScenario}` });
+    return false;
+  }
+
+  state.ticketId = data.ticketId;
+  state.lmsScenarioId = data.lmsScenario;
+  state.pendingWin = Number(data.win) || 0;
+  state.pendingBalance = Number(data.balance);
   updateTicketNumberUI();
   state.settled = false;
 
-  if (bitaDrag) cancelBitaDrag();
-  closeAllMenus();
   state.phase = 'idle';
   state.selectedSourceId = null;
   state.slots = Array(CONFIG.zones.totalSlots).fill(null);
-
-  if (state.externalScenarioCode) {
-    scenario.setScenario(state.externalScenarioCode);
-  } else if (state.mode === 'demo') {
-    scenario.reset({ advanceDemo: state.demoHasStarted });
-    state.demoHasStarted = true;
-  } else {
-    state.demoHasStarted = false;
-    scenario.setScenario(SCENARIOS.TWO);
-  }
+  scenario.setScenario(data.scenarioCode);
 
   buildPieces();
   resetSlotDom();
@@ -782,13 +904,18 @@ function beginRound() {
   rebuildPieceSprites(true);
   syncSelectorLock();
   updatePrimaryButton();
+
+  LMS.emit('X2_GAME_TICKET_READY', {
+    gameId: state.gameId, ticketId: state.ticketId, scenario: state.lmsScenarioId, denomination: state.denomination,
+    currency: state.currencyCode, currencyDisplay: state.currency, language: state.lang, mode: state.mode,
+  });
   return true;
 }
 
-function startNewGame() {
-  if (state.phase === 'animating') return;
-  if (state.autoPlay.active) return;
-  beginRound();
+async function startNewGame() {
+  if (state.phase === 'animating') return false;
+  if (state.autoPlay.active) return false;
+  return beginRound();
 }
 
 function buildPieces() {
@@ -1415,8 +1542,11 @@ function formatMultiplier(n) {
 function settleRoundIfNeeded(snap, revealed) {
   if (state.settled) return;
   state.settled = true;
-  const winAmount = state.denomination * (revealed ?? 0);
-  state.balances[state.mode] += winAmount;
+  // Money moves exactly as PayTicket said it would — `win`/`balance` here
+  // are LMS-authoritative (state.pendingWin/pendingBalance), never
+  // recomputed locally. `revealed` only drives what's shown mid-round.
+  const winAmount = state.pendingWin ?? (state.denomination * (revealed ?? 0));
+  state.balances[state.mode] = state.pendingBalance != null ? state.pendingBalance : state.balances[state.mode] + winAmount;
   saveBalances();
   updateBalanceUI();
   saveTicket(state.mode, {
@@ -1425,6 +1555,11 @@ function settleRoundIfNeeded(snap, revealed) {
     multiplier: revealed ?? 0,
     win: winAmount,
     ts: Date.now(),
+  });
+  LMS.emit('X2_GAME_ROUND_COMPLETE', {
+    gameId: state.gameId, ticketId: state.ticketId, scenario: state.lmsScenarioId, win: winAmount,
+    balance: state.balances[state.mode], denomination: state.denomination, currency: state.currencyCode,
+    currencyDisplay: state.currency, language: state.lang, mode: state.mode,
   });
 }
 
@@ -2017,10 +2152,9 @@ window.UPAY2D = {
   },
   getDenomination() { return state.denomination; },
   setScenario(code) {
-    if (!Object.values(SCENARIOS).includes(code)) return false;
+    if (!Object.values(SCENARIOS).includes(code)) return Promise.resolve(false);
     state.externalScenarioCode = code;
-    startNewGame();
-    return true;
+    return startNewGame();
   },
   clearScenarioOverride() {
     state.externalScenarioCode = null;
