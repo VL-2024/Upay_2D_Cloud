@@ -28,7 +28,7 @@ const state = {
   lastObjective: '',
   demoHasStarted: false,
   externalScenarioCode: null,
-  strikeHistory: { stage1: [], stage2: [], khan: null },
+  slots: Array(CONFIG.zones.totalSlots).fill(null),
 };
 
 const host = document.getElementById('pixiHost');
@@ -123,6 +123,8 @@ function getSceneMetrics() {
 }
 
 function setupUI() {
+  ensureSlots('zone1', 0);
+  ensureSlots('zone2', 3);
   renderStakeMenu();
   syncStakeUI();
 
@@ -292,7 +294,7 @@ function startNewGame() {
   closeStakeMenu();
   state.phase = 'idle';
   state.selectedSourceId = null;
-  state.strikeHistory = { stage1: [], stage2: [], khan: null };
+  state.slots = Array(CONFIG.zones.totalSlots).fill(null);
 
   const demoMode = document.getElementById('demoToggle').checked;
   if (state.externalScenarioCode) {
@@ -306,7 +308,8 @@ function startNewGame() {
   }
 
   buildPieces();
-  renderStrikeTrack();
+  resetSlotDom();
+  updateProgress();
   setObjectiveFromScenario();
   rebuildPieceSprites(true);
   syncSelectorLock();
@@ -501,7 +504,7 @@ function onPiecePointerDown(piece) {
   const source = getSelectedSource();
   if (!source) {
     if (!canUseAsSource(piece)) {
-      flashObjective('Эта фишка не может стать битой');
+      flashObjective('Нет пары в таком же положении — выбери другой чуко');
       pulseSprite(piece.sprite, 0.08);
       return;
     }
@@ -521,12 +524,13 @@ function onPiecePointerDown(piece) {
   flashObjective('Оттяни выбранную фишку и прицелься');
 }
 
-function recordStrikeHistory(stage, hit) {
-  if (stage === 'khan') {
-    state.strikeHistory.khan = hit;
-  } else if (stage === 'stage1' || stage === 'stage2') {
-    state.strikeHistory[stage].push(hit);
+function nextSlotIndexForStage(stage) {
+  if (stage === 'stage1') return state.slots.slice(0, 3).findIndex(v => v === null);
+  if (stage === 'stage2') {
+    const idx = state.slots.slice(3, 6).findIndex(v => v === null);
+    return idx === -1 ? -1 : 3 + idx;
   }
+  return -1;
 }
 
 function strikeTargetWithArc(source, target, launchX, launchY) {
@@ -538,7 +542,8 @@ function strikeTargetWithArc(source, target, launchX, launchY) {
 
   const stageAtStrike = scenario.snapshot().stage;
   const { hit } = scenario.resolveStrike();
-  recordStrikeHistory(stageAtStrike, hit);
+  const isKhanTarget = target.type === 'khan';
+  const slotIndex = (hit && !isKhanTarget) ? nextSlotIndexForStage(stageAtStrike) : -1;
 
   const shot = getShotVector(source, target);
   let sourceDone = false;
@@ -546,13 +551,6 @@ function strikeTargetWithArc(source, target, launchX, launchY) {
 
   const finalize = () => {
     if (!sourceDone || !targetDone) return;
-
-    if (hit) {
-      target.collected = true;
-      if (target.type === 'khan') celebrateKhan(target);
-    }
-
-    renderStrikeTrack();
     const after = scenario.snapshot();
     if (after.finished) {
       state.phase = 'settled';
@@ -570,8 +568,20 @@ function strikeTargetWithArc(source, target, launchX, launchY) {
     nudgeNearbyPieces(target, source);
     if (hit) shakeHost(2, 10);
 
-    if (hit) {
+    if (hit && isKhanTarget) {
+      celebrateKhan(target);
       animateKickOutToEdge(target, shot, () => {
+        target.collected = true;
+        targetDone = true;
+        finalize();
+      });
+    } else if (hit && slotIndex >= 0) {
+      animateToSlot(target, slotIndex, source, () => {
+        target.collected = true;
+        target.sprite = null;
+        state.slots[slotIndex] = { textureKey: target.textureKey };
+        updateSlotDom(slotIndex, target.textureKey);
+        updateProgress();
         targetDone = true;
         finalize();
       });
@@ -774,7 +784,7 @@ function isValidTarget(source, target) {
   if (source.type !== 'normal' || source.collected || target.collected) return false;
   const stage = scenario.snapshot().stage;
   if (stage === 'khan') return target.type === 'khan';
-  return target.type === 'normal';
+  return target.type === 'normal' && source.poseIndex === target.poseIndex;
 }
 
 function getValidTargets(source) {
@@ -860,49 +870,43 @@ function updateSelectionRing() {
   selectionRing.stroke({ color: 0xffffff, width: 1.5, alpha: 0.85 });
 }
 
-function renderPipRow(elId, history, total) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  let html = '';
-  for (let i = 0; i < total; i++) {
-    if (i < history.length) {
-      html += `<span class="pip ${history[i] ? 'is-hit' : 'is-miss'}"></span>`;
-    } else {
-      html += `<span class="pip is-pending"></span>`;
-    }
+function ensureSlots(zoneId, startIndex) {
+  const zone = document.getElementById(zoneId);
+  zone.innerHTML = '';
+  for (let i = 0; i < CONFIG.zones.slotsPerUpay; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.dataset.slotIndex = String(startIndex + i);
+    zone.appendChild(slot);
   }
-  el.innerHTML = html;
 }
 
-function renderStrikeTrack() {
-  const snap = scenario.snapshot();
-  renderPipRow('pipsStage1', state.strikeHistory.stage1, 3);
+function resetSlotDom() {
+  document.querySelectorAll('.slot').forEach(slot => {
+    slot.innerHTML = '';
+    slot.classList.remove('filled');
+  });
+  document.getElementById('upayZone1').classList.remove('complete');
+  document.getElementById('upayZone2').classList.remove('complete');
+}
 
-  const stage2El = document.getElementById('strikeStage2');
-  const showStage2 = snap.stage === 'stage2' || snap.stage === 'khan' || state.strikeHistory.stage2.length > 0;
-  if (stage2El) {
-    stage2El.hidden = !showStage2;
-    if (showStage2) renderPipRow('pipsStage2', state.strikeHistory.stage2, 3);
-  }
+function updateSlotDom(slotIndex, textureKey) {
+  const slot = document.querySelector(`.slot[data-slot-index="${slotIndex}"]`);
+  if (!slot) return;
+  const img = document.createElement('img');
+  img.src = textureKey.replace('./', '');
+  slot.innerHTML = '';
+  slot.appendChild(img);
+  slot.classList.add('filled');
+}
 
-  const khanEl = document.getElementById('strikeKhan');
-  const showKhan = snap.stage === 'khan' || state.strikeHistory.khan !== null;
-  if (khanEl) {
-    khanEl.hidden = !showKhan;
-    if (showKhan) renderPipRow('pipsKhan', state.strikeHistory.khan === null ? [] : [state.strikeHistory.khan], 1);
-  }
-
-  const multEl = document.getElementById('strikeMultiplier');
-  if (multEl) {
-    if (snap.finished) {
-      multEl.hidden = false;
-      multEl.textContent = `×${snap.multiplier}`;
-      multEl.classList.toggle('is-zero', snap.multiplier === 0);
-      multEl.classList.toggle('is-max', snap.multiplier === 500);
-    } else {
-      multEl.hidden = true;
-    }
-  }
+function updateProgress() {
+  const c1 = state.slots.slice(0, 3).filter(Boolean).length;
+  const c2 = state.slots.slice(3, 6).filter(Boolean).length;
+  document.getElementById('zone1Progress').textContent = `${c1}/3`;
+  document.getElementById('zone2Progress').textContent = `${c2}/3`;
+  document.getElementById('upayZone1').classList.toggle('complete', c1 === 3);
+  document.getElementById('upayZone2').classList.toggle('complete', c2 === 3);
 }
 
 function setObjective(text) {
@@ -965,6 +969,43 @@ function animateScatterIn(piece) {
     if (t >= 1) {
       sprite.rotation = tr;
       app.ticker.remove(tick);
+    }
+  }
+}
+
+function animateToSlot(piece, slotIndex, sourcePiece, onDone) {
+  const sprite = piece.sprite;
+  if (!sprite) return onDone?.();
+  const slotEl = document.querySelector(`.slot[data-slot-index="${slotIndex}"]`);
+  if (!slotEl) return onDone?.();
+  const slotRect = slotEl.getBoundingClientRect();
+  const hostRect = host.getBoundingClientRect();
+  const tx = slotRect.left - hostRect.left + slotRect.width / 2;
+  const ty = slotRect.top - hostRect.top + slotRect.height / 2;
+  const sx = sprite.x, sy = sprite.y, ss = sprite.scale.x, sr = sprite.rotation;
+  const targetScale = ss * 0.42;
+  const apex = Math.max(52, Math.min(96, Math.abs(ty - sy) * 0.36 + 46));
+  let f = 0;
+  const pauseFrames = 4;
+  const duration = 38;
+  app.ticker.add(tick);
+  function tick() {
+    f++;
+    if (f <= pauseFrames) {
+      sprite.rotation = sr + Math.sin((f / pauseFrames) * Math.PI) * 0.018;
+      return;
+    }
+    const t = Math.min(1, (f - pauseFrames) / duration);
+    const e = easeOutCubic(t);
+    sprite.x = sx + (tx - sx) * e;
+    sprite.y = sy + (ty - sy) * e - Math.sin(Math.PI * e) * apex;
+    sprite.rotation = sr + e * 0.9;
+    sprite.scale.set(ss + (targetScale - ss) * e);
+    sprite.alpha = 1 - e * 0.88;
+    if (t >= 1) {
+      app.ticker.remove(tick);
+      sprite.destroy();
+      onDone?.();
     }
   }
 }

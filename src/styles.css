@@ -12,11 +12,24 @@ html,body{margin:0;min-height:100%;background:#04182a;font-family:Inter,system-u
 body{display:flex;justify-content:center;align-items:flex-start;overflow:hidden}
 button{font:inherit}
 .shell{position:relative;width:min(100vw,941px);aspect-ratio:941/1672;max-height:100vh;overflow:hidden;background:#d8e8f1;isolation:isolate;--carpet-x:50%;--carpet-y:51.5%;--carpet-w:80%;--carpet-h:auto}
+
+/* Desktop/landscape windows are almost always shorter than the 941x1672
+   portrait design is tall, so max-height:100vh alone silently clips the
+   bottom of the layout (including the УПАЙ zones) without shrinking the
+   width to compensate. Let the shell render at its true design height and
+   scale the whole thing down uniformly to fit instead. */
+@media (min-width:941px){
+  .shell{
+    max-height:none;
+    transform:scale(min(1, calc(100vh / 1672px)));
+    transform-origin:top center;
+  }
+}
 .bg-layer,.carpet-layer{position:absolute;pointer-events:none;background-repeat:no-repeat;z-index:0}
 .bg-layer{inset:0;background-position:center top;background-size:cover}
 .carpet-layer{left:var(--carpet-x);top:var(--carpet-y);width:var(--carpet-w);height:var(--carpet-h);transform:translate(-50%,-50%);background-position:center center;background-size:contain;aspect-ratio:1/1;z-index:1;filter:drop-shadow(0 8px 12px rgba(0,0,0,.10))}
 .pixi-host{position:absolute;inset:0;z-index:2;pointer-events:auto}
-.topbar,.side-tools,.objective,.strike-track,.controls,.footer{position:absolute;z-index:4}
+.topbar,.side-tools,.objective,.upay-zones,.controls,.footer{position:absolute;z-index:4}
 
 
 .scene-settings-panel{position:absolute;right:18px;top:300px;z-index:6;width:280px;padding:14px 14px 12px;border-radius:18px;background:rgba(9,35,59,.94);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 24px rgba(0,0,0,.25);backdrop-filter:blur(4px);color:#fff}
@@ -60,19 +73,16 @@ button{font:inherit}
 .tool{width:56px;height:56px;border-radius:50%;border:2px solid rgba(234,194,105,.95);background:rgba(5,25,60,.90);color:#f5d68d;font-size:25px;font-weight:800;box-shadow:0 7px 16px rgba(0,0,0,.2)}
 
 .objective{left:50%;bottom:252px;transform:translateX(-50%);min-width:320px;max-width:76%;text-align:center;background:linear-gradient(180deg,rgba(36,81,116,.98),rgba(19,57,84,.98));border:1px solid rgba(255,255,255,.25);border-radius:21px;padding:11px 24px;font-size:21px;font-weight:850;box-shadow:0 8px 18px rgba(0,0,0,.17)}
-.strike-track{left:82px;right:82px;top:1128px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;padding:16px 20px;background:linear-gradient(180deg,rgba(18,57,88,.97),rgba(6,27,47,.96));border-radius:20px;border:2px solid rgba(160,203,229,.42);box-shadow:0 11px 22px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.10)}
-.strike-group{display:flex;flex-direction:column;align-items:center;gap:6px}
-.strike-group[hidden]{display:none}
-.strike-group-title{font-size:13px;font-weight:900;letter-spacing:.04em;color:#f3dfac;text-shadow:0 2px 5px rgba(0,0,0,.42);text-transform:uppercase}
-.strike-khan .strike-group-title{color:#ff9d7a}
-.pip-row{display:flex;gap:8px}
-.pip{width:26px;height:26px;border-radius:50%;background:rgba(2,18,33,.35);border:2px solid rgba(213,230,241,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.08);transition:transform .18s ease}
-.pip.is-hit{background:radial-gradient(circle at 35% 30%,#fff7d7,#eac269 60%,#c99a3f);border-color:#f3dba2;box-shadow:0 0 10px rgba(234,194,105,.55)}
-.pip.is-miss{background:rgba(255,255,255,.08);border-color:rgba(255,120,120,.55)}
-.pip.is-pending{opacity:.55}
-.strike-multiplier{font-size:26px;font-weight:950;color:#ffe58e;text-shadow:0 2px 8px rgba(0,0,0,.4);padding:4px 16px;border-radius:14px;background:rgba(0,0,0,.22)}
-.strike-multiplier.is-zero{color:#c7d6e2}
-.strike-multiplier.is-max{color:#8fffb0}
+.upay-zones{left:82px;right:82px;top:1128px;display:grid;grid-template-columns:1fr 65px 1fr;align-items:center;gap:16px}
+.zone{min-width:0}
+.center-ornament{display:flex;align-items:center;justify-content:center;color:#1d557d;font-size:50px;text-shadow:0 2px 2px rgba(255,255,255,.5)}
+.zone-title{text-align:center;margin-bottom:9px;color:#f3dfac;font-size:22px;font-weight:900;text-shadow:0 2px 5px rgba(0,0,0,.42)}
+.zone-progress{font-size:14px;margin-left:7px;opacity:.82;font-weight:800}
+.zone.complete .zone-title{color:#ffe58e}
+.zone-slots{height:126px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:17px 15px;background:linear-gradient(180deg,rgba(18,57,88,.97),rgba(6,27,47,.96));border-radius:20px;border:2px solid rgba(160,203,229,.42);box-shadow:0 11px 22px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.10)}
+.slot{height:88px;border:3px solid rgba(213,230,241,.74);border-radius:17px;background:rgba(2,18,33,.20);display:flex;align-items:center;justify-content:center;overflow:hidden;transition:border-color .2s ease,box-shadow .2s ease}
+.slot.filled{border-color:rgba(234,194,105,.86);box-shadow:inset 0 0 16px rgba(234,194,105,.16)}
+.slot img{width:95%;height:95%;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(0,0,0,.18))}
 
 .controls{left:25px;right:25px;bottom:74px}
 .action-row{display:grid;grid-template-columns:150px 1fr 150px;gap:15px;align-items:center;padding:18px 22px;background:linear-gradient(180deg,rgba(16,52,82,.97),rgba(5,25,43,.97));border:1px solid rgba(255,255,255,.13);border-radius:42px;box-shadow:0 18px 34px rgba(0,0,0,.23)}
@@ -88,23 +98,23 @@ button{font:inherit}
   .status-panel{right:12px;top:12px;width:160px;gap:6px}.pill{width:160px;min-height:57px;border-radius:20px;padding:7px 11px}.pill>span:first-child{font-size:12px}.pill strong{font-size:16px}.stake-arrow{right:11px;top:19px}.stake-menu{top:61px;right:6px;width:150px}.stake-option{height:42px;font-size:15px}.minor-status-row{gap:5px}.minor-pill{min-height:34px;font-size:11px}.minor-pill strong{font-size:11px}.toggle{width:30px;height:18px}.toggle::after{width:12px;height:12px}.toggle-pill input:checked+.toggle::after{transform:translateX(12px)}
   .side-tools{top:230px;left:10px;gap:10px}.tool{width:40px;height:40px;font-size:18px}.scene-settings-panel{right:10px;top:186px;width:188px;padding:10px 10px 9px;border-radius:14px}.scene-settings-head{font-size:11px;margin-bottom:4px}.scene-settings-close{width:22px;height:22px;font-size:14px}.scene-row{margin-top:8px}.scene-row>span,.scene-row>b{font-size:10px}.scene-actions{grid-template-columns:1fr;gap:6px}.scene-actions button{height:32px;font-size:10px}
   .objective{bottom:124px;min-width:230px;padding:8px 18px;font-size:15px;max-width:82%}
-  .strike-track{left:18px;right:18px;top:69.8%;gap:8px;padding:10px 12px;border-radius:14px}.strike-group-title{font-size:10px}.pip-row{gap:5px}.pip{width:17px;height:17px;border-width:1.5px}.strike-multiplier{font-size:17px;padding:3px 10px}
+  .upay-zones{left:18px;right:18px;top:69.8%;grid-template-columns:1fr 34px 1fr;gap:6px}.zone-title{font-size:15px}.zone-progress{font-size:10px}.center-ornament{font-size:30px}.zone-slots{height:79px;padding:10px 8px;gap:5px;border-radius:14px}.slot{height:57px;border-width:2px;border-radius:10px}
   .controls{left:10px;right:10px;bottom:42px}.action-row{grid-template-columns:78px 1fr 78px;gap:4px;padding:10px 9px;border-radius:26px}.icon-btn{height:76px}.icon-btn b{font-size:28px}.icon-btn span{font-size:11px}.main-btn{height:74px;border-radius:24px;font-size:27px}.main-btn small{margin-top:5px;font-size:14px}.footer{bottom:10px;font-size:10px}
 }
 
 /* Real phone widths (iPhone SE/14, common Android): the 700px breakpoint above
    is tuned for tablets and leaves too little room between the brand badge,
    title and balance/stake pills, and its px-based objective offset drifts
-   into the %-based strike-track as the shell shrinks. Tighten both. */
+   into the %-based УПАЙ zones as the shell shrinks. Tighten both. */
 @media(max-width:460px){
   .brand{left:8px;top:12px;font-size:19px}.brand span{font-size:7px}
   .title-block{left:52px;right:128px;top:10px}.title{font-size:32px}.subtitle{display:none}
   .status-panel{right:8px;top:7px;width:118px;gap:4px}.pill{width:118px;min-height:40px;border-radius:13px;padding:5px 9px}.pill>span:first-child{font-size:9px}.pill strong{font-size:12px;margin-top:0}.stake-arrow{right:7px;top:12px;font-size:13px}.stake-menu{top:44px;right:4px;width:110px}.stake-option{height:32px;font-size:12px}.minor-status-row{gap:3px}.minor-pill{min-height:26px;font-size:8px;border-radius:11px}.minor-pill strong{font-size:8px}.toggle{width:21px;height:13px}.toggle::after{width:8px;height:8px;left:2px;top:2px}.toggle-pill input:checked+.toggle::after{transform:translateX(8px)}
   .side-tools{top:110px;left:6px;gap:6px}.tool{width:30px;height:30px;font-size:13px}
   .scene-settings-panel{right:6px;top:94px;width:160px;padding:8px 8px 7px}
-  .objective{bottom:20%;min-width:0;width:82%;padding:6px 12px;font-size:12px}
-  .strike-track{top:61%;padding:8px 10px}
-  .controls{bottom:24px}
+  .objective{bottom:19%;min-width:0;width:82%;padding:6px 12px;font-size:12px}
+  .upay-zones{top:61%;gap:6px}.zone-title{font-size:12px;margin-bottom:4px}.zone-progress{font-size:9px}.center-ornament{font-size:22px}.zone-slots{height:58px;padding:6px 5px;gap:4px;border-radius:11px}.slot{height:40px;border-width:1.5px;border-radius:7px}
+  .controls{bottom:20px}
 }
 
 .main-btn.is-active-turn{background:linear-gradient(180deg,#f4dfab,#e9c56f);box-shadow:inset 0 2px 0 rgba(255,255,255,.65),0 12px 24px rgba(0,0,0,.22),0 0 0 3px rgba(240,198,108,.14)}

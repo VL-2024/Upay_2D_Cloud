@@ -26,6 +26,10 @@ export const CONFIG = {
     scaleMax: 0.172,
     khanScale: 0.26,
   },
+  zones: {
+    totalSlots: 6,
+    slotsPerUpay: 3,
+  },
   ui: {
     selectedTint: 0xdaf6ff,
     selectedGlow: 0x6ac7ff,
