@@ -23,7 +23,7 @@
   --v-controls-height:101px;
   --v-bottom-font:40px;
   --v-bottom-height:56px;
-  --v-hint-font:22px;
+  --v-hint-font:24px;
 
   /* Panel vertical-position offsets, added on top of each row's base
      top/bottom % via calc() — 0px = unchanged. */
@@ -71,8 +71,7 @@ button{font:inherit}
 
 /* ---------- Topbar: brand, title, wallet ---------- */
 .topbar{left:2.2%;right:2.2%;top:1.5%;height:11.5%;display:flex;align-items:center;gap:2%}
-.brand{flex:0 0 auto;font-weight:950;font-size:34px;line-height:.78;color:#f0c66c;text-shadow:0 2px 7px rgba(0,0,0,.3);letter-spacing:-.02em}
-.brand span{font-size:12px;letter-spacing:.14em;color:#fff}
+.brand{flex:0 0 auto;height:100%;width:auto;display:block;filter:drop-shadow(0 2px 7px rgba(0,0,0,.3))}
 .title-block{flex:1 1 auto;min-width:0;text-align:center;overflow:hidden}
 .title{font-size:clamp(30px,7.5vw,58px);line-height:.95;font-weight:950;color:#1a5b8e;text-shadow:0 2px 0 rgba(255,255,255,.52),0 7px 20px rgba(16,55,87,.18);letter-spacing:-.03em;white-space:nowrap}
 .subtitle{margin-top:4px;font-size:clamp(11px,2.4vw,16px);font-weight:800;color:#173a55;white-space:nowrap}
@@ -86,10 +85,10 @@ button{font:inherit}
 
 /* ---------- Language switch: single pill + dropdown ---------- */
 .lang-switch{right:2.2%;top:calc(1.5% + 11.5% + 1%)}
-.lang-current{min-width:64px;height:30px;padding:0 10px;border:1px solid rgba(160,203,229,.42);border-radius:12px;background:rgba(5,25,60,.94);color:#dbe9f5;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
-.lang-arrow{font-size:11px;color:#dbe63c}
-.lang-menu{position:absolute;top:34px;right:0;width:100px;border-radius:12px;overflow:hidden;z-index:20;box-shadow:0 11px 25px rgba(0,0,0,.42)}
-.lang-option{display:block;width:100%;height:36px;border:1px solid rgba(160,195,235,.25);border-width:0 1px 1px;background:rgba(5,25,60,.99);color:#fff;font-size:13px;font-weight:850;cursor:pointer}
+.lang-current{min-width:80px;height:38px;padding:0 14px;border:1px solid rgba(160,203,229,.42);border-radius:14px;background:rgba(5,25,60,.94);color:#dbe9f5;font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.lang-arrow{font-size:13px;color:#dbe63c}
+.lang-menu{position:absolute;top:42px;right:0;width:120px;border-radius:12px;overflow:hidden;z-index:20;box-shadow:0 11px 25px rgba(0,0,0,.42)}
+.lang-option{display:block;width:100%;height:42px;border:1px solid rgba(160,195,235,.25);border-width:0 1px 1px;background:rgba(5,25,60,.99);color:#fff;font-size:15px;font-weight:850;cursor:pointer}
 .lang-option:first-child{border-radius:12px 12px 0 0;border-top-width:1px}
 .lang-option:last-child{border-radius:0 0 12px 12px}
 .lang-option.selected{background:rgba(35,69,158,.99);color:var(--lime);border-color:rgba(219,230,60,.65)}
@@ -201,21 +200,20 @@ button{font:inherit}
     --v-wallet-font:20px;
     --v-info-label:11px;
     --v-info-value:27px;
-    --v-controls-font:17px;
+    --v-controls-font:18px;
     --v-controls-height:49px;
     --v-bottom-font:15px;
     --v-bottom-height:27px;
-    --v-hint-font:13px;
+    --v-hint-font:12px;
     --v-hint-shift:48px;
     --v-info-panel-shift:25px;
     --v-upay-zones-shift:46px;
     --v-controls-shift:27px;
     --v-bottom-shift:1px;
   }
-  .brand{font-size:24px}.brand span{font-size:9px}
   .title{font-size:clamp(22px,7vw,36px)}.subtitle{font-size:clamp(9px,2.2vw,12px)}
   .wallet{padding:5px 9px;gap:6px;border-radius:16px}.small-label{font-size:9px}.deposit{width:26px;height:26px;font-size:19px}
-  .lang-current{min-width:50px;height:24px;font-size:10px;padding:0 7px;border-radius:9px}.lang-menu{top:28px;width:78px}.lang-option{height:28px;font-size:11px}
+  .lang-current{min-width:60px;height:30px;font-size:13px;padding:0 10px;border-radius:10px}.lang-menu{top:34px;width:92px}.lang-option{height:34px;font-size:13px}
   .side-tools{left:1.5%}.tool{width:24px;height:24px;font-size:11px}
   .hint-text{padding:6px 14px;border-radius:13px}.hint-toggle{width:20px;height:20px;font-size:11px}
   .info-panel{gap:5px}.info-cell{padding:5px 2px;border-radius:11px}

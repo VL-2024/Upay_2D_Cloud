@@ -887,7 +887,7 @@ function renderStakeMenu() {
 }
 
 function syncStakeUI() {
-  document.getElementById('stakeValue').textContent = `${state.denomination} ${state.currency}`;
+  document.getElementById('stakeValue').textContent = state.denomination;
   renderStakeMenu();
   syncSelectorLock();
   updatePrimaryButton();
