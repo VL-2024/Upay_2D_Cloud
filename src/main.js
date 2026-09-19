@@ -676,6 +676,7 @@ function setupUI() {
 
   document.getElementById('newGameBtn').addEventListener('click', startNewGame);
   setupSceneSettingsUI();
+  setupTypeSettingsUI();
   updatePrimaryButton();
 }
 
@@ -746,7 +747,10 @@ function setupSceneSettingsUI() {
   document.getElementById('sceneRelayoutBtn')?.addEventListener('click', () => apply(true));
   document.getElementById('sceneResetBtn')?.addEventListener('click', reset);
   document.getElementById('sceneCopyBtn')?.addEventListener('click', copy);
-  openBtn?.addEventListener('click', () => panel.classList.toggle('hidden'));
+  openBtn?.addEventListener('click', () => {
+    document.getElementById('typeSettingsPanel')?.classList.add('hidden');
+    panel.classList.toggle('hidden');
+  });
   closeBtn?.addEventListener('click', () => panel.classList.add('hidden'));
 
   // Sync the sliders FROM config.js before the first apply(), so the panel's
@@ -760,6 +764,71 @@ function setupSceneSettingsUI() {
   document.getElementById('sceneSpread').value = DEFAULT_SCENE.pileSpreadScale;
 
   apply(false);
+}
+
+// Temporary "Aa" panel: live-tunes the --v-* CSS custom properties that
+// drive font sizes and row heights for the info-panel / controls /
+// bottom-tools rows, so sizing can be picked by eye on a real device and
+// copied back as the final values (see :root in styles.css).
+const TYPE_VARS = [
+  { id: 'typeWalletFont', label: 'valWalletFont', varName: '--v-wallet-font' },
+  { id: 'typeInfoLabel', label: 'valInfoLabel', varName: '--v-info-label' },
+  { id: 'typeInfoValue', label: 'valInfoValue', varName: '--v-info-value' },
+  { id: 'typeControlsFont', label: 'valControlsFont', varName: '--v-controls-font' },
+  { id: 'typeControlsHeight', label: 'valControlsHeight', varName: '--v-controls-height' },
+  { id: 'typeBottomFont', label: 'valBottomFont', varName: '--v-bottom-font' },
+  { id: 'typeBottomHeight', label: 'valBottomHeight', varName: '--v-bottom-height' },
+];
+
+function setupTypeSettingsUI() {
+  const panel = document.getElementById('typeSettingsPanel');
+  const scenePanel = document.getElementById('sceneSettingsPanel');
+  const openBtn = document.getElementById('typeSettingsToggle');
+  const closeBtn = document.getElementById('typeSettingsClose');
+  const root = document.documentElement;
+
+  const currentPx = (varName) => parseFloat(getComputedStyle(root).getPropertyValue(varName)) || 0;
+
+  const syncSlidersFromCurrent = () => {
+    TYPE_VARS.forEach(({ id, label, varName }) => {
+      const px = Math.round(currentPx(varName));
+      document.getElementById(id).value = px;
+      document.getElementById(label).textContent = `${px}px`;
+    });
+  };
+
+  TYPE_VARS.forEach(({ id, label, varName }) => {
+    document.getElementById(id).addEventListener('input', (e) => {
+      const px = Number(e.target.value);
+      root.style.setProperty(varName, `${px}px`);
+      document.getElementById(label).textContent = `${px}px`;
+    });
+  });
+
+  document.getElementById('typeResetBtn')?.addEventListener('click', () => {
+    TYPE_VARS.forEach(({ varName }) => root.style.removeProperty(varName));
+    syncSlidersFromCurrent();
+  });
+
+  document.getElementById('typeCopyBtn')?.addEventListener('click', async () => {
+    const lines = TYPE_VARS.map(({ varName }) => `  ${varName}:${Math.round(currentPx(varName))}px;`);
+    const text = `:root{\n${lines.join('\n')}\n}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      flashHint('Значения скопированы в буфер обмена', 2200);
+    } catch {
+      flashHint(text, 4000);
+    }
+  });
+
+  openBtn?.addEventListener('click', () => {
+    scenePanel?.classList.add('hidden');
+    syncSlidersFromCurrent();
+    panel.classList.toggle('hidden');
+  });
+  closeBtn?.addEventListener('click', () => panel.classList.add('hidden'));
+
+  syncSlidersFromCurrent();
 }
 
 function updatePrimaryButton() {
