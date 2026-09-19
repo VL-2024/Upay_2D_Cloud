@@ -817,10 +817,18 @@ function setupTypeSettingsUI() {
 
   document.getElementById('typeCopyBtn')?.addEventListener('click', async () => {
     const lines = TYPE_VARS.map(({ varName }) => `  ${varName}:${Math.round(currentPx(varName))}px;`);
-    const text = `:root{\n${lines.join('\n')}\n}`;
+    // Which set this is depends on the CSS breakpoint active right now
+    // (styles.css splits desktop :root from @media(max-width:700px):root),
+    // not just the raw window width — label it so a pasted block is
+    // unambiguous about where it belongs.
+    const isMobileSet = window.matchMedia('(max-width:700px)').matches;
+    const header = isMobileSet
+      ? '/* MOBILE set — goes inside @media(max-width:700px){ :root{...} } */'
+      : '/* DESKTOP set — goes in the top-level :root{...} */';
+    const text = `${header}\n:root{\n${lines.join('\n')}\n}`;
     try {
       await navigator.clipboard.writeText(text);
-      flashHint('Значения скопированы в буфер обмена', 2200);
+      flashHint(`Скопировано (${isMobileSet ? 'мобильный' : 'десктопный'} набор)`, 2400);
     } catch {
       flashHint(text, 4000);
     }

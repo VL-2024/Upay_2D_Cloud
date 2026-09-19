@@ -9,8 +9,13 @@
 
   /* Tunable via the temporary "Aa" size panel (setupTypeSettingsUI in
      main.js) — final values get baked in here once picked, panel removed.
-     One universal set (no mobile override) since it's being hand-tuned on
-     an actual phone. */
+     This is the DESKTOP set (viewport >700px, confirmed good) — the
+     shell is capped at 941px wide there and uniformly transform:scale()'d
+     to fit the window height, so these px values are relative to that
+     fixed 941px design canvas. A phone screen renders the shell at its
+     real (narrower) width instead, so the SAME px numbers are
+     proportionally too big there — see the @media(max-width:700px)
+     override below for the separate phone-tuned set. */
   --v-wallet-font:54px;
   --v-info-label:23px;
   --v-info-value:58px;
@@ -185,6 +190,26 @@ button{font:inherit}
 .tickets-empty{padding:18px 8px;text-align:center;color:#9dafc5;font-size:14px}
 
 @media(max-width:700px){
+  /* Phone set — separate from the desktop :root above because the shell
+     renders at its real (narrower) width here instead of the capped
+     941px desktop canvas, so the same px numbers don't transfer 1:1.
+     Starting values below are the desktop set scaled by ~0.43 as a
+     reasonable first guess — tune live on an actual phone via the "Aa"
+     panel and send the final numbers back. */
+  :root{
+    --v-wallet-font:23px;
+    --v-info-label:10px;
+    --v-info-value:25px;
+    --v-controls-font:16px;
+    --v-controls-height:40px;
+    --v-bottom-font:17px;
+    --v-bottom-height:27px;
+    --v-hint-shift:34px;
+    --v-info-panel-shift:34px;
+    --v-upay-zones-shift:34px;
+    --v-controls-shift:27px;
+    --v-bottom-shift:1px;
+  }
   .brand{font-size:24px}.brand span{font-size:9px}
   .title{font-size:clamp(22px,7vw,36px)}.subtitle{font-size:clamp(9px,2.2vw,12px)}
   .wallet{padding:5px 9px;gap:6px;border-radius:16px}.small-label{font-size:9px}.deposit{width:26px;height:26px;font-size:19px}
