@@ -92,5 +92,20 @@ button{font:inherit}
   .controls{left:10px;right:10px;bottom:42px}.action-row{grid-template-columns:78px 1fr 78px;gap:4px;padding:10px 9px;border-radius:26px}.icon-btn{height:76px}.icon-btn b{font-size:28px}.icon-btn span{font-size:11px}.main-btn{height:74px;border-radius:24px;font-size:27px}.main-btn small{margin-top:5px;font-size:14px}.footer{bottom:10px;font-size:10px}
 }
 
+/* Real phone widths (iPhone SE/14, common Android): the 700px breakpoint above
+   is tuned for tablets and leaves too little room between the brand badge,
+   title and balance/stake pills, and its px-based objective offset drifts
+   into the %-based strike-track as the shell shrinks. Tighten both. */
+@media(max-width:460px){
+  .brand{left:8px;top:12px;font-size:19px}.brand span{font-size:7px}
+  .title-block{left:52px;right:128px;top:10px}.title{font-size:32px}.subtitle{display:none}
+  .status-panel{right:8px;top:7px;width:118px;gap:4px}.pill{width:118px;min-height:40px;border-radius:13px;padding:5px 9px}.pill>span:first-child{font-size:9px}.pill strong{font-size:12px;margin-top:0}.stake-arrow{right:7px;top:12px;font-size:13px}.stake-menu{top:44px;right:4px;width:110px}.stake-option{height:32px;font-size:12px}.minor-status-row{gap:3px}.minor-pill{min-height:26px;font-size:8px;border-radius:11px}.minor-pill strong{font-size:8px}.toggle{width:21px;height:13px}.toggle::after{width:8px;height:8px;left:2px;top:2px}.toggle-pill input:checked+.toggle::after{transform:translateX(8px)}
+  .side-tools{top:110px;left:6px;gap:6px}.tool{width:30px;height:30px;font-size:13px}
+  .scene-settings-panel{right:6px;top:94px;width:160px;padding:8px 8px 7px}
+  .objective{bottom:20%;min-width:0;width:82%;padding:6px 12px;font-size:12px}
+  .strike-track{top:61%;padding:8px 10px}
+  .controls{bottom:24px}
+}
+
 .main-btn.is-active-turn{background:linear-gradient(180deg,#f4dfab,#e9c56f);box-shadow:inset 0 2px 0 rgba(255,255,255,.65),0 12px 24px rgba(0,0,0,.22),0 0 0 3px rgba(240,198,108,.14)}
 .main-btn.is-busy{filter:saturate(.82) brightness(.95);cursor:default}
