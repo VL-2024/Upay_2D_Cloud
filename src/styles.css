@@ -11,21 +11,21 @@
      main.js) — final values get baked in here once picked, panel removed.
      One universal set (no mobile override) since it's being hand-tuned on
      an actual phone. */
-  --v-wallet-font:32px;
-  --v-info-label:24px;
-  --v-info-value:44px;
-  --v-controls-font:32px;
-  --v-controls-height:90px;
-  --v-bottom-font:24px;
-  --v-bottom-height:60px;
+  --v-wallet-font:54px;
+  --v-info-label:23px;
+  --v-info-value:58px;
+  --v-controls-font:38px;
+  --v-controls-height:94px;
+  --v-bottom-font:39px;
+  --v-bottom-height:64px;
 
   /* Panel vertical-position offsets, added on top of each row's base
      top/bottom % via calc() — 0px = unchanged. */
-  --v-info-panel-shift:0px;
-  --v-upay-zones-shift:0px;
-  --v-hint-shift:0px;
-  --v-controls-shift:0px;
-  --v-bottom-shift:0px;
+  --v-info-panel-shift:80px;
+  --v-upay-zones-shift:80px;
+  --v-hint-shift:80px;
+  --v-controls-shift:64px;
+  --v-bottom-shift:2px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:#04182a;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--white)}
