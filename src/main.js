@@ -1,6 +1,8 @@
-import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs?v=0.1.40';
-import { CONFIG } from './config.js?v=0.1.40';
-import { ScenarioEngine, SCENARIOS } from './scenario-engine.js?v=0.1.40';
+import { Application, Assets, Container, Graphics, Sprite } from '../assets/vendor/pixi.min.mjs?v=0.2.0';
+import { CONFIG } from './config.js?v=0.2.0';
+import { ScenarioEngine, SCENARIOS, getPayoutTable } from './scenario-engine.js?v=0.2.0';
+import { LANGS, I18N } from './i18n.js?v=0.2.0';
+import { getRulesSteps } from './rules-content.js?v=0.2.0';
 
 const chukoFiles = [
   './assets/chuko/chuko_aykur.webp',
@@ -18,6 +20,37 @@ const scenario = new ScenarioEngine();
 const DEFAULT_SCENE = JSON.parse(JSON.stringify(CONFIG.scene));
 const DEFAULT_PIECES = JSON.parse(JSON.stringify(CONFIG.pieces));
 
+const DEFAULT_DEMO_BALANCE = 5000;
+const DEFAULT_REAL_BALANCE = 5000; // placeholder pool until LMS supplies real balance
+
+const LS_KEYS = {
+  lang: 'upay2d_lang',
+  mode: 'upay2d_mode',
+  balances: 'upay2d_balances',
+  sound: 'upay2d_sound',
+  music: 'upay2d_music',
+  tickets: (mode) => `upay2d_tickets_${mode}`,
+};
+
+function loadLang() {
+  const saved = localStorage.getItem(LS_KEYS.lang);
+  return LANGS.includes(saved) ? saved : 'RU';
+}
+function loadMode() {
+  return localStorage.getItem(LS_KEYS.mode) === 'real' ? 'real' : 'demo';
+}
+function loadBalances() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEYS.balances));
+    if (saved && typeof saved.real === 'number' && typeof saved.demo === 'number') return saved;
+  } catch { /* fall through to defaults */ }
+  return { real: DEFAULT_REAL_BALANCE, demo: DEFAULT_DEMO_BALANCE };
+}
+function loadBool(key, fallback) {
+  const saved = localStorage.getItem(key);
+  return saved === null ? fallback : saved === '1';
+}
+
 const state = {
   denomination: CONFIG.defaultDenomination,
   denominations: [...CONFIG.denominations],
@@ -25,10 +58,18 @@ const state = {
   phase: 'idle',
   pieces: [],
   selectedSourceId: null,
-  lastObjective: '',
   demoHasStarted: false,
   externalScenarioCode: null,
   slots: Array(CONFIG.zones.totalSlots).fill(null),
+  settled: false,
+  lang: loadLang(),
+  mode: loadMode(),
+  balances: loadBalances(),
+  soundEnabled: loadBool(LS_KEYS.sound, true),
+  musicEnabled: loadBool(LS_KEYS.music, true),
+  hintCollapsed: false,
+  ticketId: null,
+  autoPlay: { active: false, remaining: 0, stopRequested: false },
 };
 
 const host = document.getElementById('pixiHost');
@@ -128,11 +169,344 @@ function getSceneMetrics() {
   };
 }
 
+// ---------- i18n ----------
+function tr(key) {
+  return (I18N[state.lang] && I18N[state.lang][key]) || I18N.RU[key] || key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = tr(el.dataset.i18n);
+  });
+  document.getElementById('langCurrentCode').textContent = state.lang;
+  renderLangMenu();
+}
+
+function renderLangMenu() {
+  const menu = document.getElementById('langMenu');
+  menu.innerHTML = LANGS.map(l =>
+    `<button type="button" class="lang-option${l === state.lang ? ' selected' : ''}" data-lang="${l}">${l}</button>`
+  ).join('');
+}
+
+function setLanguage(lang) {
+  if (!LANGS.includes(lang) || lang === state.lang) return;
+  state.lang = lang;
+  localStorage.setItem(LS_KEYS.lang, lang);
+  applyTranslations();
+  syncStakeUI();
+  updateBalanceUI();
+  updateRoundStatus();
+  renderHint();
+  updateAutoBtnLabel();
+}
+
+function closeLangMenu() {
+  const menu = document.getElementById('langMenu');
+  if (menu) menu.hidden = true;
+  document.getElementById('langSelect')?.setAttribute('aria-expanded', 'false');
+}
+
+// ---------- money / balance ----------
+function formatMoney(n) {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
+}
+
+function saveBalances() {
+  localStorage.setItem(LS_KEYS.balances, JSON.stringify(state.balances));
+}
+
+function updateBalanceUI() {
+  const el = document.getElementById('balanceValue');
+  if (el) el.textContent = `${formatMoney(state.balances[state.mode])} ${state.currency}`;
+}
+
+// ---------- mode (real/demo) ----------
+function applyModeUI() {
+  document.querySelectorAll('#modeSwitch button[data-mode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === state.mode);
+  });
+}
+
+function switchMode(mode) {
+  if ((mode !== 'real' && mode !== 'demo') || mode === state.mode) return;
+  if (state.phase === 'animating') return;
+  if (bitaDrag) cancelBitaDrag();
+  if (state.autoPlay.active) stopAutoplay();
+  state.mode = mode;
+  localStorage.setItem(LS_KEYS.mode, mode);
+  applyModeUI();
+  updateBalanceUI();
+  updateTicketNumberUI();
+}
+
+// ---------- tickets ----------
+function generateTicketId() {
+  const ts = Date.now();
+  return state.mode === 'demo' ? `DEMO-${ts}` : `TCK-${ts}`;
+}
+
+function updateTicketNumberUI() {
+  const el = document.getElementById('ticketNumber');
+  if (el) el.textContent = `№ ${state.ticketId || '—'}`;
+}
+
+function loadTickets(mode) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(LS_KEYS.tickets(mode)));
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTicket(mode, ticket) {
+  const list = loadTickets(mode);
+  list.unshift(ticket);
+  localStorage.setItem(LS_KEYS.tickets(mode), JSON.stringify(list.slice(0, 5)));
+}
+
+function renderTicketsList() {
+  const list = document.getElementById('ticketsList');
+  const tickets = loadTickets(state.mode);
+  if (!tickets.length) {
+    list.innerHTML = `<div class="tickets-empty">${tr('noRecentTickets')}</div>`;
+    return;
+  }
+  list.innerHTML = tickets.map(t =>
+    `<div class="ticket-history-row"><div class="ticket-history-id">${t.id}</div><div class="ticket-history-win">${formatMoney(t.win)} ${state.currency}</div></div>`
+  ).join('');
+}
+
+// ---------- sound / music ----------
+function applyAudioUI() {
+  const soundBtn = document.getElementById('soundBtn');
+  const musicBtn = document.getElementById('musicBtn');
+  soundBtn.classList.toggle('on', state.soundEnabled);
+  musicBtn.classList.toggle('on', state.musicEnabled);
+  document.getElementById('soundIcon').textContent = state.soundEnabled ? '🔊' : '🔇';
+  document.getElementById('musicIcon').textContent = state.musicEnabled ? '♫' : '♫×';
+}
+
+// ---------- hint ----------
+function applyHintCollapsed() {
+  document.getElementById('hint').classList.toggle('collapsed', state.hintCollapsed);
+  document.getElementById('hintToggle').textContent = state.hintCollapsed ? '?' : '×';
+}
+
+function resultHintText(snap) {
+  const revealed = computeRevealedMultiplier(snap);
+  const amount = formatMoney(state.denomination * (revealed ?? 0));
+  if (snap.stage === 'khan') {
+    const outcome = snap.khanHit ? tr('knockedOut') : tr('stood');
+    return `${tr('khan')}: ${outcome}. ${tr('scoreWin')} ${amount} ${state.currency}`;
+  }
+  return `${tr('scoreWin')}: ${amount} ${state.currency}`;
+}
+
+function renderHint() {
+  const snap = scenario.snapshot();
+  let text;
+  if (snap.finished) {
+    text = resultHintText(snap);
+  } else if (state.phase === 'aiming' && state.selectedSourceId) {
+    text = tr('aimThrow');
+  } else if (snap.stage === 'khan') {
+    text = tr('hintKhan');
+  } else if (!state.pieces.length) {
+    text = tr('hintStart');
+  } else {
+    text = tr('hintChoose');
+  }
+  document.getElementById('hintText').textContent = text;
+}
+
+let flashTimer = null;
+function flashHint(text, ms = 1600) {
+  if (flashTimer) clearTimeout(flashTimer);
+  document.getElementById('hintText').textContent = text;
+  flashTimer = setTimeout(() => {
+    flashTimer = null;
+    renderHint();
+  }, ms);
+}
+
+// ---------- modals ----------
+function openModal(id) { document.getElementById(id).hidden = false; }
+function closeModal(id) { document.getElementById(id).hidden = true; }
+
+function renderPayoutTable() {
+  const grid = document.getElementById('payoutGrid');
+  grid.innerHTML = getPayoutTable().map(row => {
+    if (row.khan) {
+      return `<div class="payout-item payout-khan"><span>${tr('khan')}</span><strong>×${formatMultiplier(row.multiplier)}</strong></div>`;
+    }
+    return `<div class="payout-item"><span>${row.count}</span><strong>×${formatMultiplier(row.multiplier)}</strong></div>`;
+  }).join('');
+}
+
+function renderHelpSteps() {
+  const container = document.getElementById('helpSteps');
+  container.innerHTML = getRulesSteps(state.lang).map((text, i) =>
+    `<div class="help-step"><div class="help-num">${i + 1}</div><div>${text}</div></div>`
+  ).join('');
+}
+
+function setupModals() {
+  document.getElementById('infoPayoutBtn').addEventListener('click', () => {
+    closeInfoMenu();
+    renderPayoutTable();
+    openModal('payoutModal');
+  });
+  document.getElementById('infoHowBtn').addEventListener('click', () => {
+    closeInfoMenu();
+    renderHelpSteps();
+    openModal('helpModal');
+  });
+  document.getElementById('infoTicketsBtn').addEventListener('click', () => {
+    closeInfoMenu();
+    renderTicketsList();
+    openModal('ticketsModal');
+  });
+
+  ['payout', 'help', 'tickets'].forEach(prefix => {
+    const modalId = `${prefix}Modal`;
+    document.getElementById(`${prefix}Close`).addEventListener('click', () => closeModal(modalId));
+    document.getElementById(`${prefix}Ok`).addEventListener('click', () => closeModal(modalId));
+    document.getElementById(modalId).addEventListener('click', (e) => {
+      if (e.target.id === modalId) closeModal(modalId);
+    });
+  });
+}
+
+// ---------- info menu (bottom bar) ----------
+function closeInfoMenu() {
+  const menu = document.getElementById('infoMenu');
+  if (menu) menu.hidden = true;
+}
+
+// ---------- autoplay ----------
+function renderAutoplayCounts() {
+  const wrap = document.getElementById('autoplayCounts');
+  wrap.innerHTML = (CONFIG.autoPlayCounts || [5, 10, 20, 50]).map(n =>
+    `<button type="button" class="autoplay-count" data-count="${n}">${n}</button>`
+  ).join('');
+}
+
+function closeAutoplayMenu() {
+  const menu = document.getElementById('autoplayMenu');
+  if (menu) menu.hidden = true;
+}
+
+function updateAutoBtnLabel() {
+  const btn = document.getElementById('autoBtn');
+  if (!state.autoPlay.active) {
+    btn.textContent = tr('autoPlay');
+    return;
+  }
+  btn.textContent = state.autoPlay.stopRequested
+    ? tr('autoStopping')
+    : `${tr('autoStop')} (${state.autoPlay.remaining})`;
+}
+
+function startAutoplay(count) {
+  if (state.phase === 'animating' || bitaDrag || state.autoPlay.active) return;
+  state.autoPlay.active = true;
+  state.autoPlay.remaining = count;
+  state.autoPlay.stopRequested = false;
+  document.getElementById('autoBtn').classList.add('active');
+  updateAutoBtnLabel();
+  runAutoplayRound();
+}
+
+function stopAutoplay() {
+  if (!state.autoPlay.active) return;
+  state.autoPlay.stopRequested = true;
+  updateAutoBtnLabel();
+}
+
+function endAutoplay() {
+  state.autoPlay.active = false;
+  state.autoPlay.remaining = 0;
+  state.autoPlay.stopRequested = false;
+  document.getElementById('autoBtn').classList.remove('active');
+  updateAutoBtnLabel();
+  updatePrimaryButton();
+}
+
+function runAutoplayRound() {
+  if (!state.autoPlay.active) return;
+  if (state.autoPlay.stopRequested || state.autoPlay.remaining <= 0) {
+    endAutoplay();
+    return;
+  }
+  if (state.phase === 'animating') {
+    setTimeout(runAutoplayRound, 150);
+    return;
+  }
+  const started = beginRound();
+  if (!started) {
+    endAutoplay();
+    return;
+  }
+  state.autoPlay.remaining -= 1;
+  updateAutoBtnLabel();
+  autoplayStrikeLoop();
+}
+
+function findAutoSource() {
+  return state.pieces.find(p => p.type === 'normal' && !p.collected && canUseAsSource(p)) || null;
+}
+
+function autoStrike(source, target) {
+  if (!source.sprite) return;
+  strikeTargetWithArc(source, target, source.sprite.x, source.sprite.y);
+}
+
+function autoplayStrikeLoop() {
+  if (!state.autoPlay.active) return;
+  if (state.phase === 'animating' || bitaDrag) {
+    setTimeout(autoplayStrikeLoop, 150);
+    return;
+  }
+  const snap = scenario.snapshot();
+  if (snap.finished) {
+    setTimeout(runAutoplayRound, 500);
+    return;
+  }
+  const source = findAutoSource();
+  const target = source ? getValidTargets(source)[0] : null;
+  if (!source || !target) {
+    setTimeout(autoplayStrikeLoop, 150);
+    return;
+  }
+  autoStrike(source, target);
+  setTimeout(autoplayStrikeLoop, 150);
+}
+
+// ---------- generic menu close-on-outside-click ----------
+function closeAllMenus() {
+  closeStakeMenu();
+  closeLangMenu();
+  closeInfoMenu();
+  closeAutoplayMenu();
+}
+
 function setupUI() {
   ensureSlots('zone1', 0);
   ensureSlots('zone2', 3);
   renderStakeMenu();
   syncStakeUI();
+  applyTranslations();
+  applyModeUI();
+  applyAudioUI();
+  applyHintCollapsed();
+  updateBalanceUI();
+  updateTicketNumberUI();
+  renderAutoplayCounts();
+  updateAutoBtnLabel();
+  setupModals();
 
   document.getElementById('stakeSelect').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -148,8 +522,75 @@ function setupUI() {
     selectDenomination(Number(option.dataset.value));
   });
 
+  document.getElementById('langSelect').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('langMenu');
+    menu.hidden = !menu.hidden;
+    document.getElementById('langSelect').setAttribute('aria-expanded', String(!menu.hidden));
+  });
+
+  document.getElementById('langMenu').addEventListener('click', (e) => {
+    const opt = e.target.closest('.lang-option');
+    if (!opt) return;
+    setLanguage(opt.dataset.lang);
+    closeLangMenu();
+  });
+
+  document.getElementById('hintToggle').addEventListener('click', () => {
+    state.hintCollapsed = !state.hintCollapsed;
+    applyHintCollapsed();
+  });
+
+  document.getElementById('depositBtn').addEventListener('click', () => {
+    flashHint(tr('depositSoon'), 2600);
+  });
+
+  document.getElementById('modeSwitch').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-mode]');
+    if (!btn) return;
+    switchMode(btn.dataset.mode);
+  });
+
+  document.getElementById('infoBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('infoMenu');
+    menu.hidden = !menu.hidden;
+  });
+
+  document.getElementById('soundBtn').addEventListener('click', () => {
+    state.soundEnabled = !state.soundEnabled;
+    localStorage.setItem(LS_KEYS.sound, state.soundEnabled ? '1' : '0');
+    applyAudioUI();
+  });
+
+  document.getElementById('musicBtn').addEventListener('click', () => {
+    state.musicEnabled = !state.musicEnabled;
+    localStorage.setItem(LS_KEYS.music, state.musicEnabled ? '1' : '0');
+    applyAudioUI();
+  });
+
+  document.getElementById('autoBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (state.autoPlay.active) {
+      stopAutoplay();
+      return;
+    }
+    const menu = document.getElementById('autoplayMenu');
+    menu.hidden = !menu.hidden;
+  });
+
+  document.getElementById('autoplayCounts').addEventListener('click', (e) => {
+    const btn = e.target.closest('.autoplay-count');
+    if (!btn) return;
+    closeAutoplayMenu();
+    startAutoplay(Number(btn.dataset.count));
+  });
+
   document.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('.status-panel')) closeStakeMenu();
+    if (!e.target.closest('.stake-select, .stake-menu')) closeStakeMenu();
+    if (!e.target.closest('.lang-switch')) closeLangMenu();
+    if (!e.target.closest('.info-wrap')) closeInfoMenu();
+    if (!e.target.closest('.autoplay-wrap')) closeAutoplayMenu();
   });
 
   document.getElementById('newGameBtn').addEventListener('click', startNewGame);
@@ -211,9 +652,9 @@ function setupSceneSettingsUI() {
     const text = JSON.stringify(payload);
     try {
       await navigator.clipboard.writeText(text);
-      flashObjective(`Параметры скопированы: ${text}`);
+      flashHint(`Параметры скопированы: ${text}`);
     } catch {
-      flashObjective('Не удалось скопировать параметры');
+      flashHint('Не удалось скопировать параметры');
     }
   };
 
@@ -243,14 +684,21 @@ function setupSceneSettingsUI() {
 function updatePrimaryButton() {
   const btn = document.getElementById('newGameBtn');
   if (!btn) return;
-  let label = 'НОВАЯ ИГРА';
   const snap = scenario.snapshot();
-  if (state.phase === 'animating') label = 'ИДЁТ УДАР';
-  else if (state.phase === 'aiming' && state.selectedSourceId) label = 'БРОСОК / УДАР';
-  else if (!snap.finished && state.pieces.length) label = snap.stage === 'khan' ? 'ВЫБЕЙ ХАНА' : 'ВЫБЕРИ БИТУ';
-  btn.innerHTML = `${label}<small id="betLabel">${state.denomination} ${state.currency}</small>`;
-  btn.classList.toggle('is-active-turn', label !== 'НОВАЯ ИГРА');
-  btn.classList.toggle('is-busy', label === 'ИДЁТ УДАР');
+  const roundActive = state.pieces.length > 0 && !snap.finished;
+  let label;
+  if (state.phase === 'animating') {
+    label = `${tr('makeThrow')}…`;
+  } else if (roundActive) {
+    const stageTotal = snap.stage === 'khan' ? 1 : 3;
+    const stageDone = snap.stage === 'khan' ? 0 : snap.strikeIndex;
+    label = `${tr('makeThrow')} ${stageDone + 1}/${stageTotal}`;
+  } else {
+    label = tr('newGame');
+  }
+  btn.textContent = label;
+  btn.classList.toggle('is-active-turn', roundActive || state.phase === 'animating');
+  btn.classList.toggle('is-busy', state.phase === 'animating');
 }
 
 function selectorInteractive() {
@@ -273,10 +721,7 @@ function renderStakeMenu() {
 }
 
 function syncStakeUI() {
-  document.getElementById('stakeValue').textContent = state.denomination;
-  document.getElementById('currencyValue').textContent = state.currency;
-  const betLabel = document.getElementById('betLabel');
-  if (betLabel) betLabel.textContent = `${state.denomination} ${state.currency}`;
+  document.getElementById('stakeValue').textContent = `${state.denomination} ${state.currency}`;
   renderStakeMenu();
   syncSelectorLock();
   updatePrimaryButton();
@@ -294,18 +739,34 @@ function closeStakeMenu() {
   document.getElementById('stakeSelect').setAttribute('aria-expanded', 'false');
 }
 
-function startNewGame() {
-  if (state.phase === 'animating') return;
+function beginRound() {
+  // Demo balance auto-refills so the demo mode is never actually blocked;
+  // real balance stays a local placeholder pool until LMS wiring lands.
+  if (state.mode === 'demo' && state.balances.demo < state.denomination) {
+    state.balances.demo = DEFAULT_DEMO_BALANCE;
+  }
+  const bal = state.balances[state.mode];
+  if (bal < state.denomination) {
+    flashHint(tr('insufficientFunds'));
+    return false;
+  }
+  state.balances[state.mode] = bal - state.denomination;
+  saveBalances();
+  updateBalanceUI();
+
+  state.ticketId = generateTicketId();
+  updateTicketNumberUI();
+  state.settled = false;
+
   if (bitaDrag) cancelBitaDrag();
-  closeStakeMenu();
+  closeAllMenus();
   state.phase = 'idle';
   state.selectedSourceId = null;
   state.slots = Array(CONFIG.zones.totalSlots).fill(null);
 
-  const demoMode = document.getElementById('demoToggle').checked;
   if (state.externalScenarioCode) {
     scenario.setScenario(state.externalScenarioCode);
-  } else if (demoMode) {
+  } else if (state.mode === 'demo') {
     scenario.reset({ advanceDemo: state.demoHasStarted });
     state.demoHasStarted = true;
   } else {
@@ -317,10 +778,17 @@ function startNewGame() {
   resetSlotDom();
   updateProgress();
   updateRoundStatus();
-  setObjectiveFromScenario();
+  renderHint();
   rebuildPieceSprites(true);
   syncSelectorLock();
   updatePrimaryButton();
+  return true;
+}
+
+function startNewGame() {
+  if (state.phase === 'animating') return;
+  if (state.autoPlay.active) return;
+  beginRound();
 }
 
 function buildPieces() {
@@ -511,13 +979,13 @@ function onPiecePointerDown(piece) {
   const source = getSelectedSource();
   if (!source) {
     if (!canUseAsSource(piece)) {
-      flashObjective('Нет пары в таком же положении — выбери другой чуко');
+      flashHint(tr('noValidPair'));
       pulseSprite(piece.sprite, 0.08);
       return;
     }
     state.selectedSourceId = piece.id;
     state.phase = 'aiming';
-    setObjective('Прицелься и отпусти для удара');
+    renderHint();
     refreshPieceVisuals();
     startBitaDrag(piece);
     return;
@@ -528,7 +996,7 @@ function onPiecePointerDown(piece) {
     return;
   }
 
-  flashObjective('Оттяни выбранную фишку и прицелься');
+  flashHint(tr('dragSelected'));
 }
 
 function nextSlotIndexForStage(stage) {
@@ -559,14 +1027,9 @@ function strikeTargetWithArc(source, target, launchX, launchY) {
   const finalize = () => {
     if (!sourceDone || !targetDone) return;
     const after = scenario.snapshot();
-    if (after.finished) {
-      state.phase = 'settled';
-      setObjective(scenario.resultText());
-    } else {
-      state.phase = 'idle';
-      setObjectiveFromScenario();
-    }
+    state.phase = after.finished ? 'settled' : 'idle';
     updateRoundStatus();
+    renderHint();
     syncSelectorLock();
     refreshPieceVisuals();
   };
@@ -747,7 +1210,7 @@ function onBitaPointerUp() {
     animateSnapBack(source, drag.startX, drag.startY, drag.baseRotation);
     state.selectedSourceId = null;
     state.phase = 'idle';
-    setObjectiveFromScenario();
+    renderHint();
     refreshPieceVisuals();
     return;
   }
@@ -901,8 +1364,6 @@ function resetSlotDom() {
     slot.innerHTML = '';
     slot.classList.remove('filled');
   });
-  document.getElementById('upayZone1').classList.remove('complete');
-  document.getElementById('upayZone2').classList.remove('complete');
 }
 
 function updateSlotDom(slotIndex, textureKey) {
@@ -918,20 +1379,8 @@ function updateSlotDom(slotIndex, textureKey) {
 function updateProgress() {
   const c1 = state.slots.slice(0, 3).filter(Boolean).length;
   const c2 = state.slots.slice(3, 6).filter(Boolean).length;
-  document.getElementById('zone1Progress').textContent = `${c1}/3`;
-  document.getElementById('zone2Progress').textContent = `${c2}/3`;
-  document.getElementById('upayZone1').classList.toggle('complete', c1 === 3);
-  document.getElementById('upayZone2').classList.toggle('complete', c2 === 3);
-}
-
-function computeStrikeCount(snap) {
-  let count = 0;
-  if (snap.stage === 'stage1') return snap.strikeIndex;
-  count += 3;
-  if (snap.stage === 'stage2') return count + snap.strikeIndex;
-  count += 3;
-  if (snap.stage === 'khan') return count + (snap.finished ? 1 : 0);
-  return count;
+  document.getElementById('infoUpay1').textContent = `${c1}/3`;
+  document.getElementById('infoUpay2').textContent = `${c2}/3`;
 }
 
 // Only ever reveals a multiplier the player has actually earned the right to
@@ -963,42 +1412,36 @@ function formatMultiplier(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 }
 
+function settleRoundIfNeeded(snap, revealed) {
+  if (state.settled) return;
+  state.settled = true;
+  const winAmount = state.denomination * (revealed ?? 0);
+  state.balances[state.mode] += winAmount;
+  saveBalances();
+  updateBalanceUI();
+  saveTicket(state.mode, {
+    id: state.ticketId,
+    denomination: state.denomination,
+    multiplier: revealed ?? 0,
+    win: winAmount,
+    ts: Date.now(),
+  });
+}
+
 function updateRoundStatus() {
   const snap = scenario.snapshot();
-  document.getElementById('strikeCountValue').textContent = String(computeStrikeCount(snap));
+
+  const khanEl = document.getElementById('infoKhan');
+  khanEl.textContent = (snap.stage === 'khan' && snap.finished)
+    ? (snap.khanHit ? tr('knockedOut') : tr('stood'))
+    : '—';
+
   const revealed = computeRevealedMultiplier(snap);
-  document.getElementById('winValueDisplay').textContent = revealed === null ? '—' : `×${formatMultiplier(revealed)}`;
-}
+  document.getElementById('infoWin').textContent = revealed === null
+    ? '0'
+    : formatMoney(state.denomination * revealed);
 
-function setObjective(text) {
-  state.lastObjective = text;
-  document.getElementById('objective').textContent = text;
-}
-
-function setObjectiveFromScenario() {
-  const snap = scenario.snapshot();
-  let text = '';
-  if (snap.finished) {
-    text = scenario.resultText();
-  } else if (snap.stage === 'khan') {
-    text = 'Финальный удар — выбери биту и выбей Хана!';
-  } else if (snap.stage === 'stage2') {
-    text = `1 УПАЙ собран! Этап 2 — удар ${snap.strikeIndex + 1}/3`;
-  } else {
-    text = `Удар ${snap.strikeIndex + 1}/3 — выбери чуко-биту`;
-  }
-  setObjective(text);
-}
-
-let flashTimer = null;
-function flashObjective(text) {
-  if (flashTimer) clearTimeout(flashTimer);
-  const current = state.lastObjective;
-  document.getElementById('objective').textContent = text;
-  flashTimer = setTimeout(() => {
-    document.getElementById('objective').textContent = current;
-    flashTimer = null;
-  }, 1200);
+  if (snap.finished) settleRoundIfNeeded(snap, revealed);
 }
 
 function animateScatterIn(piece) {

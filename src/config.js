@@ -1,8 +1,9 @@
 export const CONFIG = {
-  version: '0.1.40-alpha',
+  version: '0.2.0-alpha',
   currency: 'сом',
   denominations: [25, 50, 100],
   defaultDenomination: 50,
+  autoPlayCounts: [5, 10, 20, 50],
   scene: {
     backgroundImage: './assets/ref/upay_background_ground.webp',
     carpetImage: './assets/ref/upay_carpet_round.webp',

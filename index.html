@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="format-detection" content="telephone=no" />
-  <title>UPAY 2D v0.1.40-alpha</title>
-  <link rel="stylesheet" href="./src/styles.css?v=0.1.40" />
+  <title>UPAY 2D v0.2.0-alpha</title>
+  <link rel="stylesheet" href="./src/styles.css?v=0.2.0" />
 </head>
 <body>
   <div id="appShell" class="shell">
@@ -17,41 +17,34 @@
     <header class="topbar">
       <div class="brand">X2<br><span>ЛОТЕРЕЯ</span></div>
       <div class="title-block">
-        <div class="title">УПАЙ</div>
-        <div class="subtitle">Выбивай чуко. Собери 2 УПАЙ. Выбей Хана!</div>
+        <div class="title" data-i18n="title">УПАЙ</div>
+        <div class="subtitle" data-i18n="subtitle">Выбей Хана</div>
       </div>
 
-      <div class="status-panel">
-        <div class="pill balance-pill">
-          <span>Баланс</span>
-          <strong id="balanceValue">12 450 сом</strong>
+      <div class="wallet">
+        <div class="wallet-meta">
+          <div class="small-label" data-i18n="balance">Баланс</div>
+          <div class="amount" id="balanceValue">—</div>
         </div>
-
-        <button class="pill stake-pill" id="stakeSelect" type="button" aria-expanded="false">
-          <span>Ставка</span>
-          <strong><span id="stakeValue">50</span> <span id="currencyValue">сом</span></strong>
-          <span class="stake-arrow">▾</span>
-        </button>
-        <div class="stake-menu" id="stakeMenu" hidden></div>
-
-        <div class="minor-status-row">
-          <div class="minor-pill">№ <strong id="ticketValue">784321</strong></div>
-          <label class="minor-pill toggle-pill">Демо
-            <input id="demoToggle" type="checkbox" checked />
-            <span class="toggle"></span>
-          </label>
-        </div>
+        <button class="deposit" id="depositBtn" type="button" aria-label="deposit">+</button>
       </div>
     </header>
 
+    <div class="lang-switch">
+      <button class="lang-current" id="langSelect" type="button" aria-expanded="false">
+        <span id="langCurrentCode">RU</span><span class="lang-arrow">▾</span>
+      </button>
+      <div class="lang-menu" id="langMenu" hidden></div>
+    </div>
+
     <aside class="side-tools">
-      <button class="tool" type="button" aria-label="Звук">◖</button>
-      <button class="tool" type="button" aria-label="Музыка">♪</button>
-      <button class="tool" type="button" aria-label="Информация">i</button>
       <button class="tool" id="sceneSettingsToggle" type="button" aria-label="Настройка сцены">⚙</button>
     </aside>
 
-    <section class="objective" id="objective">Собери 3 чуко</section>
+    <section class="hint" id="hint">
+      <span class="hint-text" id="hintText"></span>
+      <button class="hint-toggle" id="hintToggle" type="button">×</button>
+    </section>
 
     <section class="scene-settings-panel hidden" id="sceneSettingsPanel">
       <div class="scene-settings-head">
@@ -101,34 +94,109 @@
       </div>
     </section>
 
-    <section class="round-status" aria-label="Статус раунда">
-      <div class="round-pill">Удар <strong id="strikeCountValue">0</strong></div>
-      <div class="round-pill win-pill">Выигрыш <strong id="winValueDisplay">—</strong></div>
+    <section class="info-panel" aria-label="Статус раунда">
+      <div class="info-cell">
+        <div class="info-label" data-i18n="upay1">УПАЙ 1</div>
+        <div class="info-value" id="infoUpay1">0/3</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label" data-i18n="upay2">УПАЙ 2</div>
+        <div class="info-value" id="infoUpay2">0/3</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label" data-i18n="khan">ХАН</div>
+        <div class="info-value gold" id="infoKhan">—</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label" data-i18n="scoreWin">ВЫИГРЫШ</div>
+        <div class="info-value accent" id="infoWin">0</div>
+      </div>
     </section>
 
     <section class="upay-zones" aria-label="Поля УПАЙ">
       <div class="zone" id="upayZone1">
-        <div class="zone-title">УПАЙ 1 <span class="zone-progress" id="zone1Progress">0/3</span></div>
         <div class="zone-slots" id="zone1"></div>
       </div>
       <div class="center-ornament">✦</div>
       <div class="zone" id="upayZone2">
-        <div class="zone-title">УПАЙ 2 <span class="zone-progress" id="zone2Progress">0/3</span></div>
         <div class="zone-slots" id="zone2"></div>
       </div>
     </section>
 
     <section class="controls">
       <div class="action-row">
-        <button class="icon-btn" id="autoBtn" type="button"><b>⟳</b><span>Автоигра</span></button>
-        <button class="main-btn" id="newGameBtn" type="button">НОВАЯ ИГРА <small id="betLabel">50 сом</small></button>
-        <button class="icon-btn" id="prizesBtn" type="button"><b>▣</b><span>Мои призы</span></button>
+        <button class="stake-select" id="stakeSelect" type="button" aria-expanded="false">
+          <span id="stakeValue">50</span>
+        </button>
+        <div class="stake-menu" id="stakeMenu" hidden></div>
+
+        <button class="main-btn" id="newGameBtn" type="button" data-i18n="newGame">Новая игра</button>
+
+        <div class="autoplay-wrap">
+          <button class="autoplay-btn" id="autoBtn" type="button" data-i18n="autoPlay">Автоигра</button>
+          <div class="autoplay-menu" id="autoplayMenu" hidden>
+            <div class="autoplay-menu-title" data-i18n="autoGames">Количество игр</div>
+            <div class="autoplay-counts" id="autoplayCounts"></div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <footer class="footer">БОЛЬШЕ, ЧЕМ ЛОТЕРЕЯ <b>X2</b> НАШИ ИГРЫ. НАША КУЛЬТУРА.</footer>
+    <div class="bottom-tools">
+      <div class="mode-switch" id="modeSwitch">
+        <button data-mode="real" type="button" data-i18n="real">REAL</button>
+        <button data-mode="demo" type="button" data-i18n="demo">DEMO</button>
+      </div>
+
+      <div class="info-wrap">
+        <button class="info-btn" id="infoBtn" type="button" data-i18n="info">Инфо</button>
+        <div class="info-menu" id="infoMenu" hidden>
+          <button id="infoPayoutBtn" type="button" data-i18n="payoutTable">Таблица выплат</button>
+          <button id="infoHowBtn" type="button" data-i18n="howToPlay">Как играть</button>
+          <button id="infoTicketsBtn" type="button" data-i18n="myTickets">Мои билеты</button>
+        </div>
+      </div>
+
+      <button class="audio-toggle" id="soundBtn" type="button">
+        <span class="audio-toggle-cap" data-i18n="sound">Звук</span>
+        <span class="audio-toggle-icon" id="soundIcon">🔊</span>
+      </button>
+      <button class="audio-toggle" id="musicBtn" type="button">
+        <span class="audio-toggle-cap" data-i18n="music">Музыка</span>
+        <span class="audio-toggle-icon" id="musicIcon">♫×</span>
+      </button>
+
+      <div class="ticket-number" id="ticketNumber">№ —</div>
+    </div>
+
+    <div class="modal-overlay" id="payoutModal" hidden>
+      <div class="modal-dialog">
+        <button class="modal-close" id="payoutClose" aria-label="close">×</button>
+        <div class="modal-title" data-i18n="payoutTable">Таблица выплат</div>
+        <div class="payout-grid" id="payoutGrid"></div>
+        <button class="modal-ok" id="payoutOk" data-i18n="helpOk">Понятно</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="helpModal" hidden>
+      <div class="modal-dialog">
+        <button class="modal-close" id="helpClose" aria-label="close">×</button>
+        <div class="modal-title" data-i18n="helpTitle">Как играть</div>
+        <div class="help-steps" id="helpSteps"></div>
+        <button class="modal-ok" id="helpOk" data-i18n="helpOk">Понятно</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="ticketsModal" hidden>
+      <div class="modal-dialog">
+        <button class="modal-close" id="ticketsClose" aria-label="close">×</button>
+        <div class="modal-title" data-i18n="recentTickets">Последние билеты</div>
+        <div class="tickets-list" id="ticketsList"></div>
+        <button class="modal-ok" id="ticketsOk" data-i18n="helpOk">Понятно</button>
+      </div>
+    </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=0.1.40"></script>
+  <script type="module" src="./src/main.js?v=0.2.0"></script>
 </body>
 </html>

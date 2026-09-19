@@ -23,6 +23,20 @@ const RULES = Object.freeze({
   [SCENARIOS.FIVEHUNDRED]: { stage1Hits: 3, stage2Hits: 3, khanHit: true, multiplier: 500, result: 'ХАН ВЫБИТ! Главный выигрыш ×500' },
 });
 
+// Derives the payout table straight from RULES so the "Таблица выплат"
+// modal can never drift out of sync with the actual scenario values.
+export function getPayoutTable() {
+  const rows = [
+    SCENARIOS.ZERO_0, SCENARIOS.ZERO_1, SCENARIOS.ONE,
+    SCENARIOS.TWO, SCENARIOS.THREE, SCENARIOS.FIVE, SCENARIOS.TEN,
+  ].map(code => {
+    const r = RULES[code];
+    return { count: r.stage1Hits + (r.stage2Hits ?? 0), multiplier: r.multiplier };
+  });
+  rows.push({ khan: true, multiplier: RULES[SCENARIOS.FIVEHUNDRED].multiplier });
+  return rows;
+}
+
 function buildHitPattern(hitCount, total) {
   const arr = Array.from({ length: total }, (_, i) => i < hitCount);
   return shuffle(arr);
