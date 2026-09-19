@@ -17,8 +17,8 @@ export const CONFIG = {
     edgeOutset: 0.038,
     chukoScaleMultiplier: 1.05,
     khanScaleMultiplier: 1,
-    pileSpreadScale: 0.90,
-    pileSpreadHeightScale: 1.25,
+    pileSpreadScale: 0.67,
+    pileSpreadHeightScale: 0.97,
   },
   pieces: {
     normalCount: 15,

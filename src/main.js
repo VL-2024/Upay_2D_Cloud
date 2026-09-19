@@ -576,14 +576,20 @@ function strikeTargetWithArc(source, target, launchX, launchY) {
         finalize();
       });
     } else if (hit && slotIndex >= 0) {
-      animateToSlot(target, slotIndex, source, () => {
-        target.collected = true;
-        target.sprite = null;
-        state.slots[slotIndex] = { textureKey: target.textureKey };
-        updateSlotDom(slotIndex, target.textureKey);
-        updateProgress();
-        targetDone = true;
-        finalize();
+      animateKickOutToEdge(target, shot, () => {
+        // Brief pause so the "landing" at the carpet edge reads clearly
+        // before the piece lifts off again toward the УПАЙ plaque.
+        setTimeout(() => {
+          animateToSlot(target, slotIndex, source, () => {
+            target.collected = true;
+            target.sprite = null;
+            state.slots[slotIndex] = { textureKey: target.textureKey };
+            updateSlotDom(slotIndex, target.textureKey);
+            updateProgress();
+            targetDone = true;
+            finalize();
+          });
+        }, 260);
       });
     } else {
       animateMissReaction(target, shot, () => {
