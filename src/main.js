@@ -913,8 +913,16 @@ async function beginRound() {
 }
 
 async function startNewGame() {
-  if (state.phase === 'animating') return false;
+  if (state.phase === 'animating' || state.phase === 'requesting') return false;
   if (state.autoPlay.active) return false;
+  // newGameBtn doubles as the "Бросок N/3" progress readout while a round
+  // is in play — it must NOT buy a new ticket on every click then. A round
+  // is only actually over once the scenario is finished.
+  const snap = scenario.snapshot();
+  if (state.pieces.length > 0 && !snap.finished) {
+    flashHint(tr('hintChoose'));
+    return false;
+  }
   return beginRound();
 }
 
