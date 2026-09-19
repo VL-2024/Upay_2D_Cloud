@@ -526,6 +526,22 @@ function autoStrike(source, target) {
   strikeTargetWithArc(source, target, source.sprite.x, source.sprite.y);
 }
 
+// "Бросок N/3" tap: throws one random chuko that actually has a pair to
+// strike (canUseAsSource() already requires getValidTargets().length > 0),
+// so a piece with no matching partner is never picked. Lets the player
+// alternate freely between dragging manually and just tapping the button.
+function strikeRandomPiece() {
+  if (state.phase !== 'idle') return;
+  if (bitaDrag) cancelBitaDrag();
+  const candidates = state.pieces.filter(p => p.type === 'normal' && !p.collected && canUseAsSource(p));
+  if (!candidates.length) return;
+  const source = candidates[Math.floor(Math.random() * candidates.length)];
+  const targets = getValidTargets(source);
+  if (!targets.length || !source.sprite) return;
+  const target = targets[Math.floor(Math.random() * targets.length)];
+  strikeTargetWithArc(source, target, source.sprite.x, source.sprite.y);
+}
+
 function autoplayStrikeLoop() {
   if (!state.autoPlay.active) return;
   if (state.phase === 'animating' || bitaDrag) {
@@ -916,11 +932,13 @@ async function startNewGame() {
   if (state.phase === 'animating' || state.phase === 'requesting') return false;
   if (state.autoPlay.active) return false;
   // newGameBtn doubles as the "Бросок N/3" progress readout while a round
-  // is in play — it must NOT buy a new ticket on every click then. A round
-  // is only actually over once the scenario is finished.
+  // is in play — it must NOT buy a new ticket on every click then. Instead
+  // it throws one random valid chuko for the player (same strike a manual
+  // drag would make, just auto-aimed) — a round is only actually over once
+  // the scenario is finished.
   const snap = scenario.snapshot();
   if (state.pieces.length > 0 && !snap.finished) {
-    flashHint(tr('hintChoose'));
+    strikeRandomPiece();
     return false;
   }
   return beginRound();
