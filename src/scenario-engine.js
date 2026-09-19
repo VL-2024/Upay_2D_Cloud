@@ -5,7 +5,7 @@ export const SCENARIOS = Object.freeze({
   TWO: 'TWO',
   THREE: 'THREE',
   FIVE: 'FIVE',
-  TWENTYFIVE: 'TWENTYFIVE',
+  TEN: 'TEN',
   FIVEHUNDRED: 'FIVEHUNDRED',
 });
 
@@ -14,12 +14,12 @@ export const SCENARIOS = Object.freeze({
 // khanHit: whether the final strike lands on Khan (only reachable if stage2Hits === 3).
 const RULES = Object.freeze({
   [SCENARIOS.ZERO_0]: { stage1Hits: 0, stage2Hits: null, khanHit: null, multiplier: 0, result: 'Выбито 0 чуко. Выигрыш ×0' },
-  [SCENARIOS.ZERO_1]: { stage1Hits: 1, stage2Hits: null, khanHit: null, multiplier: 0, result: 'Выбито 1 чуко. Выигрыш ×0' },
-  [SCENARIOS.ONE]: { stage1Hits: 2, stage2Hits: null, khanHit: null, multiplier: 1, result: 'Выбито 2 чуко. Выигрыш ×1' },
-  [SCENARIOS.TWO]: { stage1Hits: 3, stage2Hits: 0, khanHit: null, multiplier: 2, result: '1 УПАЙ собран! Всего 3 чуко. Выигрыш ×2' },
+  [SCENARIOS.ZERO_1]: { stage1Hits: 1, stage2Hits: null, khanHit: null, multiplier: 0.2, result: 'Выбито 1 чуко. Выигрыш ×0,2' },
+  [SCENARIOS.ONE]: { stage1Hits: 2, stage2Hits: null, khanHit: null, multiplier: 0.5, result: 'Выбито 2 чуко. Выигрыш ×0,5' },
+  [SCENARIOS.TWO]: { stage1Hits: 3, stage2Hits: 0, khanHit: null, multiplier: 1.5, result: '1 УПАЙ собран! Всего 3 чуко. Выигрыш ×1,5' },
   [SCENARIOS.THREE]: { stage1Hits: 3, stage2Hits: 1, khanHit: null, multiplier: 3, result: 'Всего 4 чуко. Выигрыш ×3' },
   [SCENARIOS.FIVE]: { stage1Hits: 3, stage2Hits: 2, khanHit: null, multiplier: 5, result: 'Всего 5 чуко. Выигрыш ×5' },
-  [SCENARIOS.TWENTYFIVE]: { stage1Hits: 3, stage2Hits: 3, khanHit: false, multiplier: 25, result: '2 УПАЙ собран! Хан устоял. Выигрыш ×25' },
+  [SCENARIOS.TEN]: { stage1Hits: 3, stage2Hits: 3, khanHit: false, multiplier: 10, result: '2 УПАЙ собран! Хан устоял. Выигрыш ×10' },
   [SCENARIOS.FIVEHUNDRED]: { stage1Hits: 3, stage2Hits: 3, khanHit: true, multiplier: 500, result: 'ХАН ВЫБИТ! Главный выигрыш ×500' },
 });
 
@@ -46,7 +46,7 @@ export class ScenarioEngine {
       SCENARIOS.TWO,
       SCENARIOS.THREE,
       SCENARIOS.FIVE,
-      SCENARIOS.TWENTYFIVE,
+      SCENARIOS.TEN,
       SCENARIOS.FIVEHUNDRED,
     ];
     this.demoIndex = 0;

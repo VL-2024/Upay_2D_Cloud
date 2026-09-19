@@ -941,27 +941,33 @@ function computeRevealedMultiplier(snap) {
   const c1 = snap.stage1Total;
   if (snap.stage === 'stage1') {
     if (!snap.finished) return null;
-    return c1 < 2 ? 0 : 1;
+    if (c1 === 0) return 0;
+    if (c1 === 1) return 0.2;
+    return 0.5;
   }
   if (snap.stage === 'stage2') {
-    if (!snap.finished) return 2;
+    if (!snap.finished) return 1.5;
     const total = c1 + snap.stage2Total;
-    if (total === 3) return 2;
+    if (total === 3) return 1.5;
     if (total === 4) return 3;
     return 5;
   }
   if (snap.stage === 'khan') {
-    if (!snap.finished) return 25;
-    return snap.khanHit ? 500 : 25;
+    if (!snap.finished) return 10;
+    return snap.khanHit ? 500 : 10;
   }
   return snap.multiplier ?? 0;
+}
+
+function formatMultiplier(n) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 }
 
 function updateRoundStatus() {
   const snap = scenario.snapshot();
   document.getElementById('strikeCountValue').textContent = String(computeStrikeCount(snap));
   const revealed = computeRevealedMultiplier(snap);
-  document.getElementById('winValueDisplay').textContent = revealed === null ? '—' : `×${revealed}`;
+  document.getElementById('winValueDisplay').textContent = revealed === null ? '—' : `×${formatMultiplier(revealed)}`;
 }
 
 function setObjective(text) {
@@ -1486,24 +1492,27 @@ function updateKhanGlowState() {
     if (!khanGlowTick) {
       let t = 0;
       khanGlowTick = () => {
-        t += 0.05;
+        t += 0.10;
         const wave = (Math.sin(t) + 1) / 2;
+        const flash = Math.pow(wave, 1.6); // sharper, punchier peak than a plain sine
         if (!khan.sprite) return;
-        khan.sprite.tint = mixHex(0xffffff, 0xffd35c, 0.35 + wave * 0.5);
+        khan.sprite.tint = mixHex(0xffffff, 0xffb020, 0.20 + flash * 0.80);
         const w = app.renderer.width;
         const responsive = w / 941;
         const baseScale = khan.scaleBase * responsive * (CONFIG.scene.khanScaleMultiplier ?? 1);
-        khan.sprite.scale.set(baseScale * (1 + wave * 0.035));
+        khan.sprite.scale.set(baseScale * (1 + flash * 0.09));
 
         khanGlowRing.visible = true;
         khanGlowRing.clear();
         khanGlowRing.position.set(khan.sprite.x, khan.sprite.y);
-        const rw = khan.sprite.width * (0.60 + wave * 0.12);
-        const rh = khan.sprite.height * (0.54 + wave * 0.12);
+        const rw = khan.sprite.width * (0.62 + flash * 0.34);
+        const rh = khan.sprite.height * (0.56 + flash * 0.34);
         khanGlowRing.ellipse(0, 0, rw, rh);
-        khanGlowRing.fill({ color: 0xffd35c, alpha: 0.08 + wave * 0.14 });
-        khanGlowRing.ellipse(0, 0, rw * 1.08, rh * 1.08);
-        khanGlowRing.stroke({ color: 0xffe08a, width: 2.5, alpha: 0.35 + wave * 0.4 });
+        khanGlowRing.fill({ color: 0xffc23c, alpha: 0.14 + flash * 0.30 });
+        khanGlowRing.ellipse(0, 0, rw * 1.14, rh * 1.14);
+        khanGlowRing.stroke({ color: 0xfff0b0, width: 3.5 + flash * 2, alpha: 0.45 + flash * 0.55 });
+        khanGlowRing.ellipse(0, 0, rw * 1.30, rh * 1.30);
+        khanGlowRing.stroke({ color: 0xffd35c, width: 2, alpha: (0.15 + flash * 0.35) * 0.6 });
       };
       app.ticker.add(khanGlowTick);
     }
